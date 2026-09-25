@@ -66,6 +66,18 @@ struct DenView: View {
 
     private func stats(_ cat: Cat) -> some View {
         Card {
+            HStack(spacing: 10) {
+                Image(systemName: "birthday.cake.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.rose)
+                    .frame(width: 34, height: 34).background(Circle().fill(Theme.roseTint))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(cat.ageText).font(Theme.font(15, .bold))
+                    Text(cat.humanAgeText).font(Theme.font(12)).foregroundStyle(Theme.muted)
+                }
+                Spacer()
+                Text("Lv \(cat.level)").font(Theme.font(13, .bold)).foregroundStyle(Theme.muted)
+            }
+            .accessibilityElement(children: .combine)
+            Divider().padding(.vertical, 2)
             ForEach(StatKind.allCases) { kind in
                 StatBar(label: kind.title, value: Double(cat.stat(kind)), max: kind.displayMax, trailing: "\(cat.stat(kind))")
             }

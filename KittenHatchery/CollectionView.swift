@@ -66,7 +66,8 @@ struct CollectionView: View {
                     Spacer()
                     Text("Lv \(cat.level)").font(Theme.font(12, .semibold)).foregroundStyle(Theme.muted)
                 }
-                Text(cat.kind.title).font(Theme.font(12, .semibold)).foregroundStyle(Theme.muted).lineLimit(1)
+                Text("\(cat.kind.title) · \(cat.ageText)").font(Theme.font(12, .semibold)).foregroundStyle(Theme.muted).lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 HStack(spacing: 6) {
                     Tag(text: cat.stage.title, color: cat.stage == .legend ? Rarity.epic.color : Theme.rose)
                     Tag(text: cat.rarity.title, color: cat.rarity.color)

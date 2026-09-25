@@ -221,7 +221,7 @@ struct FriendsView: View {
     var body: some View {
         Screen {
             ScreenHeader(eyebrow: "Social", title: "Friends") {
-                if !store.isOnline {
+                if !store.isOnline && store.hasFriends {
                     Pill(icon: "heart.fill", text: "\(store.playdatesLeft) / \(GameStore.playdatesPerDay) playdates")
                 }
             }
@@ -250,10 +250,10 @@ struct FriendsView: View {
                 }
                 .buttonStyle(PressableStyle())
             }
-            Text("Friends").font(Theme.font(17, .bold))
             if store.friends.isEmpty {
-                Text("No friends yet. Share your code or add a friend's code above.")
-                    .font(Theme.font(14)).foregroundStyle(Theme.muted).padding(.vertical, 12)
+                InviteFriendsCard()
+            } else {
+                Text("Friends").font(Theme.font(17, .bold))
             }
             ForEach(store.friends) { f in
                 Card(padding: 12) {
@@ -284,15 +284,20 @@ struct FriendsView: View {
                 }
             }
             if !store.isOnline {
-                Text("Sam, Mia and Leo are in-game pals who live in the neighbourhood. You get \(GameStore.playdatesPerDay) playdates a day.")
-                    .font(Theme.font(12)).foregroundStyle(Theme.muted)
+                if store.hasFriends {
+                    Text("Sam, Mia and Leo are in-game pals who live in the neighbourhood. You get \(GameStore.playdatesPerDay) playdates a day.")
+                        .font(Theme.font(12)).foregroundStyle(Theme.muted)
+                }
             } else {
                 Text("\(GameStore.playdatesPerDay) playdates a day. Chat uses preset phrases only.")
                     .font(Theme.font(12)).foregroundStyle(Theme.muted)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(isPresented: $debugVisit) { VisitView(friendID: store.friends[0].id) }
+        .navigationDestination(isPresented: $debugVisit) {
+            // Built even when unused, so it must not assume a friend exists.
+            if let first = store.friends.first { VisitView(friendID: first.id) }
+        }
         #if DEBUG
         .onAppear {
             let args = ProcessInfo.processInfo.arguments

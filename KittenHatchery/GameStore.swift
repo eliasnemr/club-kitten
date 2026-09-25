@@ -25,6 +25,8 @@ struct SaveData: Codable {
     var lastBonusDay = ""
     /// Goes up on every save; the cloud keeps whichever copy has the highest number.
     var saveVersion = 0
+    /// Duplicate kittens sent to the Kitty Hotel.
+    var hotelGuests = 0
 
     init() {}
 
@@ -59,6 +61,7 @@ struct SaveData: Codable {
         streak = try c.decodeIfPresent(Int.self, forKey: .streak) ?? 0
         lastBonusDay = try c.decodeIfPresent(String.self, forKey: .lastBonusDay) ?? ""
         saveVersion = try c.decodeIfPresent(Int.self, forKey: .saveVersion) ?? 0
+        hotelGuests = try c.decodeIfPresent(Int.self, forKey: .hotelGuests) ?? 0
     }
 }
 
@@ -115,6 +118,11 @@ final class GameStore {
         }
         online = OnlineConfig.client.map { OnlineService(client: $0) }
         online?.store = self
+        // Cats from before ages existed start counting today.
+        if data.cats.contains(where: { $0.bornAt == nil }) {
+            for i in data.cats.indices where data.cats[i].bornAt == nil { data.cats[i].bornAt = Date() }
+            save()
+        }
         refreshChallenges()
     }
 
@@ -127,10 +135,22 @@ final class GameStore {
     var activeCat: Cat? { data.cats.first { $0.id == data.activeCatID } ?? data.cats.first }
     var discovered: Set<Breed> { Set(data.cats.map(\.kind)) }
     var lounge: Lounge { data.lounge }
+    /// Sam, Mia and Leo are practice characters for development; App Store builds don't show them.
+    static let practiceFriends: Bool = {
+        #if DEBUG
+        // -noPracticeFriends previews what App Store builds show.
+        return !ProcessInfo.processInfo.arguments.contains("-noPracticeFriends")
+        #else
+        return false
+        #endif
+    }()
+
     var friends: [Friend] {
         if let online, online.isLive { return online.friends.map(\.asFriend) }
-        return data.friends
+        return Self.practiceFriends ? data.friends : []
     }
+    /// Whether there is anyone to visit or have a playdate with.
+    var hasFriends: Bool { !friends.isEmpty }
     var guestbook: [GuestEntry] {
         if let online, online.isLive { return online.guestbook.map(\.asEntry) }
         return data.guestbook
@@ -177,9 +197,11 @@ final class GameStore {
 
     private func refreshChallenges() {
         let today = ChallengeBook.dayKey()
-        guard data.challengeDay != today else { return }
+        // Friend challenges can't be done without friends, so swap today's set if it has any.
+        let impossible = !hasFriends && data.challenges.contains { $0.kind.needsFriends && !$0.claimed }
+        guard data.challengeDay != today || impossible else { return }
         data.challengeDay = today
-        data.challenges = ChallengeBook.make(for: today)
+        data.challenges = ChallengeBook.make(for: today, social: hasFriends)
         save()
     }
 
@@ -331,6 +353,21 @@ final class GameStore {
         pendingHatch = (cat, egg.rarity)
     }
 
+    /// You can only have one cat of each breed.
+    func owns(_ breed: Breed) -> Bool { data.cats.contains { $0.kind == breed } }
+
+    static func hotelReward(_ rarity: Rarity) -> Int { [20, 40, 80, 150][rarity.index] }
+    var hotelGuests: Int { data.hotelGuests }
+
+    /// A duplicate kitten moves into the Kitty Hotel, which thanks you with coins.
+    func sendToHotel(_ cat: Cat) {
+        record(.hatchEgg)
+        data.hotelGuests += 1
+        data.coins += Self.hotelReward(cat.rarity)
+        pendingHatch = nil
+        save()
+    }
+
     func adopt(_ cat: Cat) {
         record(.hatchEgg)
         data.cats.append(cat)
@@ -372,9 +409,10 @@ final class GameStore {
         data.lounge.items.filter { $0.kind == kind }.count + data.lounge.stored.filter { $0 == kind }.count
     }
 
-    /// Buys an item into lounge storage. Returns false without enough coins.
+    /// Buys an item into lounge storage. Each item can be owned once.
+    /// Returns false without enough coins or if you already own it.
     func buy(_ kind: Furniture) -> Bool {
-        guard spendCoins(price(kind)) else { return false }
+        guard owned(kind) == 0, spendCoins(price(kind)) else { return false }
         data.lounge.stored.append(kind)
         record(.shop)
         save()
@@ -542,7 +580,7 @@ final class GameStore {
     }
 
     private func simulateFriends() {
-        guard !isOnline, !data.cats.isEmpty, now.timeIntervalSince(data.lastVisitCheck) > 90 else { return }
+        guard Self.practiceFriends, !isOnline, !data.cats.isEmpty, now.timeIntervalSince(data.lastVisitCheck) > 90 else { return }
         data.lastVisitCheck = now
         let online = data.friends.filter(\.online)
         guard let friend = online.randomElement(), Double.random(in: 0..<1) < 0.6 else { save(); return }
@@ -595,7 +633,11 @@ final class GameStore {
                     Cat.random(rarity: .epic, level: 8, name: "Leo", breed: .maineCoon),
                     Cat.random(rarity: .legendary, level: 12, name: "Duchess", breed: .britishShorthair),
                     Cat.random(rarity: .legendary, level: 6, name: "Owlie", breed: .scottishFold)]
-        data = SaveData(cats: cats, activeCatID: mochi.id,
+        // Varied ages for testing: 45 days, 2 days, 12 days, 5 months, 14 months, today.
+        let ages = [45, 2, 12, 150, 420, 0]
+        var aged = cats
+        for i in aged.indices { aged[i].bornAt = Calendar.current.date(byAdding: .day, value: -ages[i % ages.count], to: Date()) }
+        data = SaveData(cats: aged, activeCatID: mochi.id,
                         eggs: [Egg(rarity: .rare), Egg(rarity: .legendary, duration: 0), Egg(rarity: .epic), Egg(rarity: .basic)],
                         coins: 640, energy: 5, energyStamp: Date())
         var lounge = Lounge(items: [PlacedItem(kind: .window, x: 0.2, y: 0.22),
@@ -615,7 +657,7 @@ final class GameStore {
         lounge.nameFirst = 2
         lounge.nameSecond = 2
         data.lounge = lounge
-        data.challenges = ChallengeBook.make(for: ChallengeBook.dayKey())
+        data.challenges = ChallengeBook.make(for: ChallengeBook.dayKey(), social: true)
         data.challengeDay = ChallengeBook.dayKey()
         data.challenges[0].progress = data.challenges[0].target
         data.nest = [NestEgg(egg: Egg(rarity: .rare), source: "Playdate with Sam", expires: Date().addingTimeInterval(23 * 3600)),

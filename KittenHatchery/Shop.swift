@@ -115,14 +115,20 @@ struct ShopView: View {
                       portrait: store.activeCat?.kind)
     }
 
+    @ViewBuilder
     private func priceLabel(_ kind: Furniture) -> some View {
         let p = store.price(kind)
-        return HStack(spacing: 4) {
+        if store.owned(kind) > 0 {
+            Label("Owned", systemImage: "checkmark.circle.fill")
+                .font(Theme.font(13, .bold)).foregroundStyle(Theme.success)
+        } else {
+        HStack(spacing: 4) {
             Image(systemName: "pawprint.circle.fill").font(.system(size: 12)).foregroundStyle(Theme.warning)
             Text("\(p)").font(Theme.font(14, .heavy))
             if p != kind.price {
                 Text("\(kind.price)").font(Theme.font(12)).strikethrough().foregroundStyle(Theme.muted)
             }
+        }
         }
     }
 
@@ -159,7 +165,7 @@ struct ShopView: View {
                     .frame(maxWidth: .infinity).frame(height: 100)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Theme.beige))
                     .overlay(alignment: .topTrailing) {
-                        if owned > 0 { Tag(text: "Owned \(owned)", color: Theme.success).padding(6) }
+                        if owned > 0 { Tag(text: "Owned", color: Theme.success).padding(6) }
                     }
                 Text(kind.title).font(Theme.font(15, .bold)).lineLimit(1)
                 HStack {
@@ -213,7 +219,7 @@ struct ShopItemSheet: View {
                              shelfBreeds: Breed.allCases.reversed().filter { store.discovered.contains($0) },
                              portrait: store.activeCat?.kind)
                         .overlay(alignment: .bottomLeading) {
-                            Tag(text: bought ? "In your storage" : "Preview · not bought yet", color: Theme.text)
+                            Tag(text: bought || store.owned(kind) > 0 ? "You own this" : "Preview · not bought yet", color: Theme.text)
                                 .background(Capsule().fill(.white)).padding(10)
                         }
                 } else {
@@ -237,12 +243,21 @@ struct ShopItemSheet: View {
                     }
                 }
                 let owned = store.owned(kind)
-                if owned > 0 { Text("You own \(owned).").font(Theme.font(13, .semibold)).foregroundStyle(Theme.success) }
+                let inStorage = store.lounge.stored.contains(kind)
 
                 if bought {
                     Label("Sent to your lounge storage", systemImage: "shippingbox.fill")
                         .font(Theme.font(15, .bold)).foregroundStyle(Theme.success)
                     Button("Place it now") { placeNow(kind, tint) }.buttonStyle(PrimaryButtonStyle())
+                    Button("Keep shopping") { dismiss() }.buttonStyle(SecondaryButtonStyle())
+                } else if owned > 0 {
+                    // Each item can only be owned once.
+                    Label(inStorage ? "You own this · it's in your storage" : "You own this · it's in your lounge",
+                          systemImage: "checkmark.circle.fill")
+                        .font(Theme.font(15, .bold)).foregroundStyle(Theme.success)
+                    if inStorage {
+                        Button("Place it now") { placeNow(kind, tint) }.buttonStyle(PrimaryButtonStyle())
+                    }
                     Button("Keep shopping") { dismiss() }.buttonStyle(SecondaryButtonStyle())
                 } else {
                     Button {

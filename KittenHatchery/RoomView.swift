@@ -376,7 +376,8 @@ struct RoomView: View {
             }
         }
         .position(x: p.x * w, y: p.y * h - size / 2)
-        .zIndex(p.y * 100 + 1)
+        // Cats always draw in front of furniture (items use 0–100), so they can't vanish behind a sofa or tree.
+        .zIndex(1000 + p.y * 100)
         .allowsHitTesting(!editing)
         .onTapGesture {
             Haptics.tap(.soft)

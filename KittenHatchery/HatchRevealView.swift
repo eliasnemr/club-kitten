@@ -14,14 +14,22 @@ struct HatchRevealView: View {
     @FocusState private var nameFocused: Bool
 
     private let tapsNeeded = 4
+    /// Decided once when the screen opens: you already have a cat of this breed.
+    @State private var duplicate = false
 
     var body: some View {
         VStack(spacing: 18) {
             VStack(spacing: 4) {
-                Text(phase == .egg ? "SOMETHING IS MOVING" : (rarity == .legendary ? "LEGENDARY FIND" : "A NEW FRIEND"))
+                Text(phase == .egg ? "SOMETHING IS MOVING"
+                     : duplicate ? "ALREADY IN YOUR FAMILY"
+                     : (rarity == .legendary ? "LEGENDARY FIND" : "A NEW FRIEND"))
                     .font(Theme.font(12, .bold)).tracking(0.6).foregroundStyle(Theme.muted)
-                Text(phase == .egg ? "Tap to crack the egg" : "It's a \(cat.kind.title)!")
+                Text(phase == .egg ? "Tap to crack the egg"
+                     : duplicate ? "You already have a \(cat.kind.title)!" : "It's a \(cat.kind.title)!")
                     .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
                     .font(Theme.font(28, .heavy))
             }
             .padding(.top, 16)
@@ -60,6 +68,10 @@ struct HatchRevealView: View {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
 
+                if duplicate {
+                    hotelCard
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
                 Card {
                     Text(cat.kind.blurb).font(Theme.font(13)).foregroundStyle(Theme.muted)
                     Text("Name your kitten").font(Theme.font(14, .bold))
@@ -79,6 +91,7 @@ struct HatchRevealView: View {
                     }
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             } else {
                 let left = max(0, tapsNeeded - taps)
                 Text(left == 0 ? "Here it comes!" : "\(left) more \(left == 1 ? "tap" : "taps")")
@@ -88,16 +101,30 @@ struct HatchRevealView: View {
             Spacer(minLength: 0)
 
             if phase != .egg {
-                Button("Welcome home") { adopt() }
+                if duplicate {
+                    Button {
+                        Haptics.success()
+                        store.sendToHotel(cat)
+                        store.tab = .den
+                    } label: {
+                        Label("Send to the Kitty Hotel · +\(GameStore.hotelReward(rarity))", systemImage: "building.2.fill")
+                    }
                     .buttonStyle(PrimaryButtonStyle())
-                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                } else {
+                    Button("Welcome home") { adopt() }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
             }
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
         .foregroundStyle(Theme.text)
         .background(Theme.cream.ignoresSafeArea())
-        .onAppear { name = cat.name }
+        .onAppear {
+            name = cat.name
+            duplicate = store.owns(cat.kind)
+        }
         #if DEBUG
         .task {
             let args = ProcessInfo.processInfo.arguments
@@ -131,6 +158,28 @@ struct HatchRevealView: View {
                 Haptics.success()
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) { phase = .burst }
                 withAnimation(.easeOut(duration: 0.9).delay(0.05)) { fly = true }
+            }
+        }
+    }
+
+    private var hotelCard: some View {
+        Card {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "building.2.fill")
+                    .font(.system(size: 22, weight: .semibold)).foregroundStyle(Theme.rose)
+                    .frame(width: 48, height: 48).background(Circle().fill(Theme.roseTint))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Off to the Kitty Hotel").font(Theme.font(16, .heavy))
+                    Text("You can only keep one cat of each breed. This little \(cat.kind.title) would rather move into the Kitty Hotel, where it lives with lots of other kitties and has an awesome life.")
+                        .font(Theme.font(13)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            HStack {
+                Label("\(store.hotelGuests) \(store.hotelGuests == 1 ? "kitty lives" : "kitties live") there already", systemImage: "heart.fill")
+                    .font(Theme.font(12, .semibold)).foregroundStyle(Theme.muted)
+                Spacer()
+                Label("+\(GameStore.hotelReward(rarity)) thank-you coins", systemImage: "pawprint.circle.fill")
+                    .font(Theme.font(12, .bold)).foregroundStyle(Theme.warning)
             }
         }
     }

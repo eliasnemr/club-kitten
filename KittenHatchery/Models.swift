@@ -253,8 +253,56 @@ struct Cat: Codable, Identifiable, Equatable {
     var isStarter = false
     /// Optional so saves from before breeds existed still load (they become Cream puffs).
     var breed: Breed?
+    /// When the cat hatched. Optional so older saves load; those start counting from their first launch after the update.
+    var bornAt: Date?
 
     var kind: Breed { breed ?? .cream }
+
+    // MARK: Age (real time, separate from level)
+
+    /// Whole days since hatching.
+    var ageDays: Int {
+        let start = Calendar.current.startOfDay(for: bornAt ?? Date())
+        return max(0, Calendar.current.dateComponents([.day], from: start, to: Calendar.current.startOfDay(for: Date())).day ?? 0)
+    }
+
+    /// "Hatched today", "12 days old", "3 months old", "2 years old".
+    var ageText: String { Cat.ageText(days: ageDays) }
+
+    /// The same age in human terms, from the usual cat-to-human chart.
+    var humanAgeText: String { Cat.humanAgeText(days: ageDays) }
+
+    static func ageText(days: Int) -> String {
+        switch days {
+        case 0: return "Hatched today"
+        case 1: return "1 day old"
+        case ..<60: return "\(days) days old"
+        case ..<730: return "\(days / 30) months old"
+        default: return "\(days / 365) years old"
+        }
+    }
+
+    /// Cat age in days → human years. 1 month ≈ 1, 3 months ≈ 4, 6 months ≈ 10, 1 year ≈ 15, 2 years ≈ 24, then +4 a year.
+    static func humanYears(days: Int) -> Double {
+        let points: [(Double, Double)] = [(0, 0), (30, 1), (90, 4), (180, 10), (365, 15), (730, 24)]
+        let d = Double(days)
+        if d >= 730 { return 24 + (d - 730) / 365 * 4 }
+        for i in 1..<points.count where d <= points[i].0 {
+            let (d0, h0) = points[i - 1], (d1, h1) = points[i]
+            return h0 + (d - d0) / (d1 - d0) * (h1 - h0)
+        }
+        return 24
+    }
+
+    static func humanAgeText(days: Int) -> String {
+        let years = humanYears(days: days)
+        if years < 1 {
+            let months = max(1, Int((years * 12).rounded()))
+            return months == 1 ? "like a 1-month-old human" : "like a \(months)-month-old human"
+        }
+        let y = Int(years.rounded())
+        return "like a \(y)-year-old human"
+    }
     var stage: Stage { .forLevel(level) }
     var xpNeeded: Int { 40 + level * 20 }
 
@@ -313,7 +361,8 @@ struct Cat: Codable, Identifiable, Equatable {
             power: 10 + Int.random(in: 0...3) + bonus,
             speed: 10 + Int.random(in: 0...3) + bonus,
             charm: 10 + Int.random(in: 0...3) + bonus,
-            breed: breed
+            breed: breed,
+            bornAt: Date()
         )
         cat.add(personality.favored, personality.favored.step * 2)
         cat.add(breed.gift, breed.gift.step * 2)
@@ -330,7 +379,7 @@ struct Cat: Codable, Identifiable, Equatable {
 
     static func starter() -> Cat {
         Cat(name: "Mochi", element: .sunbeam, personality: .playful, rarity: .basic,
-            hp: 46, power: 12, speed: 15, charm: 12, isStarter: true, breed: .cream)
+            hp: 46, power: 12, speed: 15, charm: 12, isStarter: true, breed: .cream, bornAt: Date())
     }
 }
 

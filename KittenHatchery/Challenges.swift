@@ -27,6 +27,9 @@ enum ChallengeKind: String, Codable, CaseIterable {
         case .playdate: "heart.fill"
         }
     }
+    /// Challenges that need a friend to visit or have a playdate with.
+    var needsFriends: Bool { self == .visitFriend || self == .playdate }
+
     /// Where the "Go" button takes you.
     var tab: Tab {
         switch self {
@@ -60,14 +63,14 @@ enum ChallengeBook {
     }
 
     /// Three challenges per day, the same for the whole day.
-    static func make(for day: String) -> [DailyChallenge] {
+    static func make(for day: String, social: Bool = true) -> [DailyChallenge] {
         var rng = SeededRandom(seed: stableSeed(day))
         let options: [(ChallengeKind, ClosedRange<Int>, Int)] = [
             (.playGames, 2...3, 30), (.winBattles, 1...2, 40), (.petCats, 10...15, 20), (.highScore, 12...20, 45),
             (.hatchEgg, 1...1, 35), (.visitFriend, 1...1, 25), (.shop, 1...1, 25), (.playdate, 1...1, 40),
         ]
         var picked: [DailyChallenge] = []
-        var pool = options
+        var pool = options.filter { social || !$0.0.needsFriends }
         while picked.count < 3, !pool.isEmpty {
             let i = Int(rng.next() % UInt64(pool.count))
             let (kind, range, reward) = pool.remove(at: i)
