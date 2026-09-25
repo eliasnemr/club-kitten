@@ -2,7 +2,7 @@
 -- Clients never write friendships, playdates or eggs directly; they go through the
 -- security-definer functions below so limits and egg rolls are decided by the server.
 
-create extension if not exists pgcrypto;
+create extension if not exists pgcrypto with schema extensions;
 
 -- ---------------------------------------------------------------------------
 -- Profiles
@@ -12,7 +12,7 @@ create table public.profiles (
   id uuid primary key references auth.users on delete cascade,
   display_name text not null default 'Player' check (char_length(display_name) between 1 and 24),
   friend_code text not null unique
-    default ('KIT-' || upper(substr(encode(gen_random_bytes(4), 'hex'), 1, 6))),
+    default ('KIT-' || upper(substr(encode(extensions.gen_random_bytes(4), 'hex'), 1, 6))),
   gc_player_id text unique,               -- set only by the link-game-center function
   lounge jsonb not null default '{}'::jsonb,
   showcase jsonb not null default '[]'::jsonb,  -- up to 5 cats shown to visitors

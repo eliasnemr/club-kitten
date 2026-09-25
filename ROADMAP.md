@@ -6,8 +6,9 @@
 - [x] App uploads after changes and on background, restores after reinstall, never overwrites progress with a fresh install
 - [x] Cloud save works with multiplayer still off (`SUPABASE_MULTIPLAYER = NO`)
 - [ ] Game Center restore on a new phone: change `link-game-center` to sign in to the existing account instead of moving the Game Center ID
-- [ ] Create the real Supabase project and deploy both migrations
+- [x] Create the real Supabase project (`club-kitten`, Frankfurt, ref `zdinecoljijyrairsfyh`) and deploy both migrations; anonymous sign-ins on
 - [ ] Update App Privacy answers and the privacy policy before shipping
+- [ ] Decide on the Supabase plan: free projects pause after a week with no traffic (the app then falls back to on-device saves); Pro ($25/mo) never pauses
 
 ## ⏸ Paused: online multiplayer (Supabase + Game Center)
 

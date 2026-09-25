@@ -2,7 +2,7 @@ project_id = "kitten-hatchery"
 
 [api]
 port = 54321
-schemas = ["public"]
+schemas = ["public", "graphql_public"]
 
 [db]
 port = 54322
@@ -13,7 +13,7 @@ enabled = true
 
 [auth]
 enabled = true
-site_url = "http://127.0.0.1:3000"
+site_url = "http://localhost:3000"
 # Players start anonymous; Game Center is linked to that account by the link-game-center function.
 enable_anonymous_sign_ins = true
 
