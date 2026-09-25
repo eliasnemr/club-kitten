@@ -48,11 +48,24 @@ cat,kitten,pet,virtual pet,egg,hatch,cute,cozy,decorate,room,minigames,collect,b
 - Everything else: None
 - Made for Kids: **No** (Kids Category needs a parental gate on external links; not built yet)
 
-## App Privacy
-**Data Not Collected.** No tracking, analytics, accounts or network calls in v1.
+## App Privacy (v1.2: cloud save + friends)
+Data **linked to the user**, used for **App Functionality** only, **not** used for tracking:
+- **Identifiers → User ID** (anonymous account ID and Game Center player ID)
+- **Contact Info → Name** (Game Center display name, shown to friends)
+- **User Content → Gameplay Content** (saved game, lounge, cats shown to friends)
+- **User Content → Other User Content** (guestbook stickers and preset chat phrases sent to friends; reports)
 
-## Notes for App Review
-Club Kitten is fully offline. There is no login. The friends in the Lounge (Sam, Mia and Leo) are in-game characters, not real players, and there is no chat with other people. All coins are earned in-game; there are no purchases.
+## Age rating (v1.2)
+- Cartoon or fantasy violence: Infrequent/Mild
+- Messaging and chat / user interaction: **Yes**, limited to preset phrases and emotes between friends; report and block available
+- Everything else: None
+
+## Notes for App Review (v1.2)
+Club Kitten has no login; each install gets an anonymous account. Multiplayer is between friends only: Game Center friends who play are added automatically, or players swap a friend code (Lounge → Friends).
+Chat is limited to a fixed list of preset phrases and emotes; there is no free-text chat.
+Players can report or block anyone from the Friends list (⋯), a friend's lounge (⋯), the guestbook (⋯) and playdate invites. Blocking takes effect immediately. The developer reviews reports daily and can suspend accounts.
+To try multiplayer on two devices: open Lounge → Friends on device A, copy the friend code, enter it on device B and tap Add.
+All coins are earned in-game; there are no purchases.
 
 ## Screenshots
 Same six in both sizes, in this order: hatch reveal, Den, Lounge, shop, battle, breed book.

@@ -70,6 +70,13 @@ final class GameCenter {
         }
     }
 
+    /// Apple's sheet for sending Game Center friend requests by message or email.
+    /// Friends who accept and play Club Kitten show up in your Friends list automatically.
+    func presentFriendRequestCreator() {
+        guard isAuthenticated, let vc = Self.topViewController() else { return }
+        try? GKLocalPlayer.local.presentFriendRequestCreator(from: vc)
+    }
+
     private static func topViewController() -> UIViewController? {
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
         var top = scene?.keyWindow?.rootViewController

@@ -191,6 +191,9 @@ struct GuestbookView: View {
                         .padding(.horizontal, 12).frame(height: 36)
                         .overlay(Capsule().stroke(entry.thanked ? Theme.border : Theme.rose, lineWidth: 1.5))
                         .disabled(entry.thanked)
+                        if let visitor = entry.friendID {
+                            PlayerSafetyMenu(playerID: visitor, name: entry.friendName, context: .guestbook)
+                        }
                     }
                 }
             }
@@ -217,6 +220,7 @@ struct FriendsView: View {
     @State private var limitAlert = false
     @State private var debugVisit = false
     @State private var request: PlaydateRequest?
+    @State private var showBlocked = false
 
     var body: some View {
         Screen {
@@ -273,6 +277,7 @@ struct FriendsView: View {
                             }
                         }
                         Spacer(minLength: 0)
+                        PlayerSafetyMenu(playerID: f.id, name: f.name, context: .friends)
                         NavigationLink {
                             VisitView(friendID: f.id)
                         } label: {
@@ -291,6 +296,13 @@ struct FriendsView: View {
             } else {
                 Text("\(GameStore.playdatesPerDay) playdates a day. Chat uses preset phrases only.")
                     .font(Theme.font(12)).foregroundStyle(Theme.muted)
+                Button {
+                    showBlocked = true
+                } label: {
+                    Label("Blocked players (\(store.online?.blocked.count ?? 0))", systemImage: "hand.raised")
+                        .font(Theme.font(14, .semibold)).foregroundStyle(Theme.muted)
+                }
+                .frame(minHeight: 44)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -303,6 +315,7 @@ struct FriendsView: View {
             let args = ProcessInfo.processInfo.arguments
             if args.contains("-visit") { debugVisit = true }
             if args.contains("-playdate") { playdate = store.friends.first }
+            if args.contains("-blockedList") { showBlocked = true }
         }
         #endif
         .fullScreenCover(item: $playdate) { f in
@@ -312,6 +325,7 @@ struct FriendsView: View {
             if let cat = store.activeCat { OnlinePlaydateView(friend: r.friend, myCat: cat, invite: r.invite) }
         }
         .refreshable { await store.online?.refresh() }
+        .sheet(isPresented: $showBlocked) { BlockedPlayersView().presentationDragIndicator(.visible) }
         .alert("No playdates left today", isPresented: $limitAlert) {
             Button("OK", role: .cancel) {}
         }
@@ -334,6 +348,7 @@ extension FriendsView {
                 Button("Not now") { store.online?.decline(inv.id) }
                     .font(Theme.font(11, .semibold)).opacity(0.85)
             }
+            PlayerSafetyMenu(playerID: f.id, name: f.name, context: .invite).tint(.white)
         }
         .foregroundStyle(.white)
         .padding(14)
@@ -345,6 +360,7 @@ extension FriendsView {
 
 struct VisitView: View {
     @Environment(GameStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
     let friendID: UUID
     @State private var bubbles: [UUID: Bubble] = [:]
     @State private var pets = 0
@@ -361,6 +377,7 @@ struct VisitView: View {
             Screen {
                 ScreenHeader(eyebrow: "Visiting", title: "\(f.name)'s lounge") {
                     Pill(icon: "person.2.fill", text: "\(visitors(me).count) visiting")
+                    PlayerSafetyMenu(playerID: f.id, name: f.name, context: .lounge) { dismiss() }
                 }
                 RoomView(lounge: f.lounge, residents: f.cats, guests: visitors(me),
                          height: 340, bubbles: allBubbles, shelfBreeds: f.cats.map(\.kind), portrait: f.star.kind, onPetCat: { cat in pet(cat, friend: f) })

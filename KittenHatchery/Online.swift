@@ -70,6 +70,7 @@ struct RemoteFriend: Decodable, Identifiable, Equatable {
 
 struct RemoteGuestEntry: Decodable, Identifiable, Equatable {
     let id: UUID
+    let visitorID: UUID?
     let visitorName: String
     let visitorShowcase: [Cat]
     let sticker: Int
@@ -80,12 +81,13 @@ struct RemoteGuestEntry: Decodable, Identifiable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case id, sticker, phrase, gift, thanked
-        case visitorName = "visitor_name", visitorShowcase = "visitor_showcase", createdAt = "created_at"
+        case visitorID = "visitor_id", visitorName = "visitor_name", visitorShowcase = "visitor_showcase", createdAt = "created_at"
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
+        visitorID = try c.decodeIfPresent(UUID.self, forKey: .visitorID)
         visitorName = try c.decode(String.self, forKey: .visitorName)
         visitorShowcase = (try? c.decode([Cat].self, forKey: .visitorShowcase)) ?? []
         sticker = try c.decode(Int.self, forKey: .sticker)
@@ -99,7 +101,7 @@ struct RemoteGuestEntry: Decodable, Identifiable, Equatable {
         let stickerName = Chat.stickers[min(max(sticker, 0), Chat.stickers.count - 1)]
         let quote = phrase.map { " · \u{201C}\(Chat.phrases[min(max($0, 0), Chat.phrases.count - 1)])\u{201D}" } ?? ""
         let giftText = gift.map { $0 == "treat" ? "Treat · +1 Charm" : "Yarn toy · +1 Speed" }
-        return GuestEntry(id: id, friendName: visitorName, breed: visitorShowcase.first?.kind ?? .cream,
+        return GuestEntry(id: id, friendID: visitorID, friendName: visitorName, breed: visitorShowcase.first?.kind ?? .cream,
                           note: "Left a \(stickerName) sticker\(quote)", gift: giftText, date: createdAt, thanked: thanked)
     }
 }
@@ -120,6 +122,31 @@ struct RemotePlaydate: Decodable, Identifiable, Equatable {
         case id, status, bond, chance, result
         case hostID = "host_id", guestID = "guest_id", hostCat = "host_cat", guestCat = "guest_cat", startedAt = "started_at"
     }
+}
+
+struct BlockedPlayer: Decodable, Identifiable, Equatable {
+    let id: UUID
+    let displayName: String
+    enum CodingKeys: String, CodingKey { case id, displayName = "display_name" }
+}
+
+/// Why a player is being reported. Stored as the raw value on the server.
+enum ReportReason: String, CaseIterable, Identifiable {
+    case name, mean, cheating, other
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .name: "Inappropriate name"
+        case .mean: "Mean or bullying"
+        case .cheating: "Cheating"
+        case .other: "Something else"
+        }
+    }
+}
+
+/// Where the report was made from.
+enum ReportContext: String {
+    case friends, lounge, guestbook, playdate, invite
 }
 
 struct EggGrant: Decodable {
@@ -191,6 +218,8 @@ final class OnlineService {
     /// Friends currently standing in your lounge.
     private(set) var visitors: [LoungePresence] = []
     private(set) var visitorChat: [UUID: ChatMessage] = [:]
+    /// Players you blocked. They can't see you, visit or invite you.
+    private(set) var blocked: [BlockedPlayer] = []
 
     @ObservationIgnored weak var store: GameStore?
     @ObservationIgnored private var myLounge: RealtimeChannelV2?
@@ -390,6 +419,7 @@ final class OnlineService {
             myName = p.displayName
         }
         if let f: [RemoteFriend] = try? await client.rpc("list_friends").execute().value { friends = f }
+        if let b: [BlockedPlayer] = try? await client.rpc("list_blocked").execute().value { blocked = b }
         if let g: [RemoteGuestEntry] = try? await client.rpc("my_guestbook").execute().value {
             guestbook = g
             store?.applyGuestGifts(g)
@@ -422,6 +452,33 @@ final class OnlineService {
                 .eq("id", value: me).execute()
         }
     }
+
+    // MARK: Safety
+
+    private struct PlayerParam: Encodable { let p_player: UUID }
+    private struct ReportParams: Encodable { let p_player: UUID; let p_reason: String; let p_context: String }
+
+    /// Blocks a player: removes the friendship on the server and hides them everywhere here.
+    func block(_ player: UUID) async throws {
+        try await client.rpc("block_player", params: PlayerParam(p_player: player)).execute()
+        friends.removeAll { $0.id == player }
+        invites.removeAll { $0.hostID == player }
+        visitors.removeAll { $0.userID == player }
+        guestbook.removeAll { $0.visitorID == player }
+        await refresh()
+    }
+
+    func unblock(_ player: UUID) async throws {
+        try await client.rpc("unblock_player", params: PlayerParam(p_player: player)).execute()
+        blocked.removeAll { $0.id == player }
+    }
+
+    func report(_ player: UUID, reason: ReportReason, context: ReportContext) async throws {
+        try await client.rpc("report_player", params: ReportParams(
+            p_player: player, p_reason: reason.rawValue, p_context: context.rawValue)).execute()
+    }
+
+    func isBlocked(_ player: UUID) -> Bool { blocked.contains { $0.id == player } }
 
     func addFriend(code: String) async throws {
         _ = try await client.rpc("add_friend_by_code", params: ["p_code": code]).execute()
@@ -469,7 +526,7 @@ final class OnlineService {
                 let joins = (try? change.decodeJoins(as: LoungePresence.self)) ?? []
                 let leaves = (try? change.decodeLeaves(as: LoungePresence.self)) ?? []
                 var list = self.visitors.filter { v in !leaves.contains { $0.userID == v.userID } }
-                for j in joins where !list.contains(where: { $0.userID == j.userID }) { list.append(j) }
+                for j in joins where !list.contains(where: { $0.userID == j.userID }) && !self.isBlocked(j.userID) { list.append(j) }
                 self.visitors = list
             }
         }
@@ -591,7 +648,8 @@ final class LoungeSession {
                 let joins = (try? change.decodeJoins(as: LoungePresence.self)) ?? []
                 let leaves = (try? change.decodeLeaves(as: LoungePresence.self)) ?? []
                 var list = self.others.filter { o in !leaves.contains { $0.userID == o.userID } }
-                for j in joins where j.userID != self.me && !list.contains(where: { $0.userID == j.userID }) { list.append(j) }
+                for j in joins where j.userID != self.me && !list.contains(where: { $0.userID == j.userID })
+                    && self.service?.isBlocked(j.userID) != true { list.append(j) }
                 self.others = list
             }
         }

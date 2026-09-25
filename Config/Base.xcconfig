@@ -4,6 +4,6 @@
 SUPABASE_PROJECT_REF =
 SUPABASE_ANON_KEY =
 // Cloud save turns on with the keys above. Multiplayer (friends, lounges, playdates) is separate.
-SUPABASE_MULTIPLAYER = NO
+SUPABASE_MULTIPLAYER = YES
 
 #include? "Secrets.xcconfig"

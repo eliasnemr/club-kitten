@@ -282,6 +282,8 @@ struct Friend: Codable, Identifiable, Equatable {
 
 struct GuestEntry: Codable, Identifiable, Equatable {
     var id = UUID()
+    /// The visitor's player ID when it came from the server (used for report and block).
+    var friendID: UUID?
     var friendName: String
     var breed: Breed
     var note: String

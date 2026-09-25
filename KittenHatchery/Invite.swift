@@ -29,8 +29,20 @@ struct InviteFriendsCard: View {
             }
             .buttonStyle(PrimaryButtonStyle())
             .simultaneousGesture(TapGesture().onEnded { Haptics.tap(.medium) })
-            Text("Send it by Messages, WhatsApp or anywhere you like.")
-                .font(Theme.font(12)).foregroundStyle(Theme.muted)
+            if store.online?.gameCenterLinked == true {
+                Button {
+                    Haptics.tap(.medium)
+                    GameCenter.shared.presentFriendRequestCreator()
+                } label: {
+                    Label("Add Game Center friends", systemImage: "gamecontroller.fill")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                Text("Game Center friends who play Club Kitten join your list automatically.")
+                    .font(Theme.font(12)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
+            } else {
+                Text("Send it by Messages, WhatsApp or anywhere you like.")
+                    .font(Theme.font(12)).foregroundStyle(Theme.muted)
+            }
         }
         .padding(18)
         .frame(maxWidth: .infinity)
