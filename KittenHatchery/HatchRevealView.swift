@@ -80,7 +80,8 @@ struct HatchRevealView: View {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
-                Text("\(tapsNeeded - taps) more \(tapsNeeded - taps == 1 ? "tap" : "taps")")
+                let left = max(0, tapsNeeded - taps)
+                Text(left == 0 ? "Here it comes!" : "\(left) more \(left == 1 ? "tap" : "taps")")
                     .font(Theme.font(15, .semibold)).foregroundStyle(Theme.muted)
             }
 
@@ -99,7 +100,17 @@ struct HatchRevealView: View {
         .onAppear { name = cat.name }
         #if DEBUG
         .task {
-            guard ProcessInfo.processInfo.arguments.contains("-autoplay") else { return }
+            let args = ProcessInfo.processInfo.arguments
+            if args.contains("-rapidTaps") {
+                // Taps faster than the burst delay, to check the counter never goes below zero.
+                for _ in 0..<8 {
+                    try? await Task.sleep(for: .milliseconds(50))
+                    crack()
+                }
+                print("rapidTaps: taps=\(taps) of \(tapsNeeded)")
+                return
+            }
+            guard args.contains("-autoplay") else { return }
             for _ in 0..<tapsNeeded {
                 try? await Task.sleep(for: .milliseconds(400))
                 crack()
@@ -109,7 +120,9 @@ struct HatchRevealView: View {
     }
 
     private func crack() {
-        guard phase == .egg else { return }
+        // Taps during the short pause before the burst must not count, or the label goes negative
+        // and the burst animation is queued more than once.
+        guard phase == .egg, taps < tapsNeeded else { return }
         taps += 1
         Haptics.tap(taps >= tapsNeeded ? .heavy : .medium)
         withAnimation(.spring(response: 0.12, dampingFraction: 0.2)) { shake.toggle() }
