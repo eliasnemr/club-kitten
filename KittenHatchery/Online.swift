@@ -255,14 +255,9 @@ final class OnlineService {
         let version: Int
     }
 
-    /// A random ID for this install, so the server can tell devices apart.
-    private static var deviceID: String {
-        let key = "club-kitten-device-id"
-        if let id = UserDefaults.standard.string(forKey: key) { return id }
-        let id = UUID().uuidString
-        UserDefaults.standard.set(id, forKey: key)
-        return id
-    }
+    /// Only the platform is sent, not a per-device ID, so the App Privacy answers stay
+    /// User ID + Gameplay Content.
+    private static let platform = "ios"
 
     /// On launch: restore a newer save from the server (a reinstall or restored account),
     /// or upload this phone's save if it is newer.
@@ -345,7 +340,7 @@ final class OnlineService {
             let raw = try JSONEncoder().encode(store.data)
             let json = try JSONDecoder().decode(AnyJSON.self, from: raw)
             let r: PushResult = try await client.rpc("push_save", params: PushParams(
-                p_data: json, p_version: store.saveVersion, p_device: Self.deviceID)).execute().value
+                p_data: json, p_version: store.saveVersion, p_device: Self.platform)).execute().value
             if !r.accepted {
                 // The server already has this version or a newer one (from another device): take it
                 // instead of retrying, so two copies can't bounce back and forth.
