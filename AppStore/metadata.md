@@ -54,5 +54,7 @@ cat,kitten,pet,virtual pet,egg,hatch,cute,cozy,decorate,room,minigames,collect,b
 ## Notes for App Review
 Club Kitten is fully offline. There is no login. The friends in the Lounge (Sam, Mia and Leo) are in-game characters, not real players, and there is no chat with other people. All coins are earned in-game; there are no purchases.
 
-## Screenshots (6.9-inch, 1320×2868)
-In `AppStore/screenshots/`, in this order: hatch reveal, Den, Lounge, shop, battle, breed book.
+## Screenshots
+Same six in both sizes, in this order: hatch reveal, Den, Lounge, shop, battle, breed book.
+- 6.9-inch (1320×2868): `AppStore/screenshots/`
+- 6.5-inch (1284×2778): `AppStore/screenshots-6.5/`
