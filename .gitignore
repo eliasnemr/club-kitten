@@ -1,0 +1,6 @@
+build/
+*.xcuserstate
+xcuserdata/
+Config/Secrets.xcconfig
+supabase/.temp/
+supabase/.branches/

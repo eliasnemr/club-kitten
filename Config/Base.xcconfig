@@ -1,0 +1,7 @@
+// Supabase project settings. Put your real values in Secrets.xcconfig (not committed).
+// Leave them empty to play with the offline practice friends.
+// Use SUPABASE_PROJECT_REF = local to talk to `supabase start` on this Mac.
+SUPABASE_PROJECT_REF =
+SUPABASE_ANON_KEY =
+
+#include? "Secrets.xcconfig"
