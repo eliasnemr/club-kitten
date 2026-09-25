@@ -28,6 +28,10 @@ struct RootView: View {
             PlayView().tabItem { Label("Play", systemImage: "gamecontroller.fill") }.tag(Tab.play)
         }
         .tint(Theme.rose)
+        #if DEBUG
+        // Sits in the empty strip under the Dynamic Island, clear of headers and buttons.
+        .overlay(alignment: .top) { DevBadge().padding(.top, 2) }
+        #endif
         .onReceive(clock) { _ in store.tick() }
         .task { await store.online?.start() }
         .onChange(of: scenePhase) { _, phase in

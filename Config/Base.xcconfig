@@ -5,5 +5,7 @@ SUPABASE_PROJECT_REF =
 SUPABASE_ANON_KEY =
 // Cloud save turns on with the keys above. Multiplayer (friends, lounges, playdates) is separate.
 SUPABASE_MULTIPLAYER = YES
+// Debug builds only: YES turns on dev mode (server off, practice friends, dev panel).
+CLUB_KITTEN_DEV_MODE = NO
 
 #include? "Secrets.xcconfig"

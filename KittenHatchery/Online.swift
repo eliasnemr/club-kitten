@@ -14,7 +14,7 @@ enum OnlineConfig {
         let info = Bundle.main.infoDictionary ?? [:]
         let ref = (info["SupabaseProjectRef"] as? String ?? "").trimmingCharacters(in: .whitespaces)
         let key = (info["SupabaseAnonKey"] as? String ?? "").trimmingCharacters(in: .whitespaces)
-        guard !ref.isEmpty, !key.isEmpty else { return nil }
+        guard !ref.isEmpty, !key.isEmpty, !DevMode.isOn else { return nil }
         #if !DEBUG
         // The Supabase running on your Mac only exists in development; release builds stay offline.
         if ref == "local" { return nil }

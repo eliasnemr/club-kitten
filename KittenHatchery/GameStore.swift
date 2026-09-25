@@ -136,14 +136,8 @@ final class GameStore {
     var discovered: Set<Breed> { Set(data.cats.map(\.kind)) }
     var lounge: Lounge { data.lounge }
     /// Sam, Mia and Leo are practice characters for development; App Store builds don't show them.
-    static let practiceFriends: Bool = {
-        #if DEBUG
-        // -noPracticeFriends previews what App Store builds show.
-        return !ProcessInfo.processInfo.arguments.contains("-noPracticeFriends")
-        #else
-        return false
-        #endif
-    }()
+    /// Only in dev mode; normal Debug builds behave like the App Store version.
+    static let practiceFriends: Bool = DevMode.isOn
 
     var friends: [Friend] {
         if let online, online.isLive { return online.friends.map(\.asFriend) }
@@ -674,6 +668,33 @@ final class GameStore {
             visitor = Visitor(friendID: f.id, until: Date().addingTimeInterval(180), bubble: "Cute lounge!")
             invite = f.id
         }
+    }
+
+    // Dev panel helpers.
+    func devFillEnergy() {
+        data.energy = Self.maxEnergy
+        data.energyStamp = Date()
+        save()
+    }
+
+    func devFinishEggs() {
+        for i in data.eggs.indices { data.eggs[i].startedAt = Date().addingTimeInterval(-data.eggs[i].duration - 1) }
+        save()
+    }
+
+    func devFinishChallenges() {
+        for i in data.challenges.indices where !data.challenges[i].claimed {
+            data.challenges[i].progress = data.challenges[i].target
+        }
+        save()
+    }
+
+    func devResetSave() {
+        data = SaveData()
+        pendingHatch = nil
+        visitor = nil
+        invite = nil
+        save()
     }
     #endif
 }
