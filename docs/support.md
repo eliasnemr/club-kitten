@@ -1,6 +1,6 @@
 # Club Kitten support
 
-Thanks for playing! If something isn't working, email [SUPPORT EMAIL] with:
+Thanks for playing! If something isn't working, email eliasnemr@gmail.com with:
 
 - your iPhone model and iOS version
 - what you were doing when the problem happened

@@ -11,4 +11,4 @@ Club Kitten does not collect, store or share any personal information.
 
 If a future version adds online play, this policy will be updated before that version is released, and the app will explain what is shared.
 
-Questions: [SUPPORT EMAIL]
+Questions: eliasnemr@gmail.com

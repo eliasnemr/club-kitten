@@ -9,8 +9,8 @@
 | Secondary category | Games → Simulation |
 | Price | Free, no in-app purchases |
 | Devices | iPhone only, iOS 17+ |
-| Privacy policy URL | host `docs/privacy.md` (see below) |
-| Support URL | host `docs/support.md` |
+| Privacy policy URL | https://eliasnemr.github.io/club-kitten/privacy |
+| Support URL | https://eliasnemr.github.io/club-kitten/support |
 
 ## Subtitle (30 max)
 Hatch, raise & play with cats
