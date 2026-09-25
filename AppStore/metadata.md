@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Name | Kitten Hatchery (check availability; "Club Kitten" matches the bundle ID) |
+| Name | Club Kitten (check it is available in App Store Connect) |
 | Bundle ID | com.eliasnemr.clubkitten |
 | SKU | clubkitten-ios |
 | Primary category | Games → Casual |
@@ -52,7 +52,7 @@ cat,kitten,pet,virtual pet,egg,hatch,cute,cozy,decorate,room,minigames,collect,b
 **Data Not Collected.** No tracking, analytics, accounts or network calls in v1.
 
 ## Notes for App Review
-Kitten Hatchery is fully offline. There is no login. The friends in the Lounge (Sam, Mia and Leo) are in-game characters, not real players, and there is no chat with other people. All coins are earned in-game; there are no purchases.
+Club Kitten is fully offline. There is no login. The friends in the Lounge (Sam, Mia and Leo) are in-game characters, not real players, and there is no chat with other people. All coins are earned in-game; there are no purchases.
 
 ## Screenshots (6.9-inch, 1320×2868)
 In `AppStore/screenshots/`, in this order: hatch reveal, Den, Lounge, shop, battle, breed book.

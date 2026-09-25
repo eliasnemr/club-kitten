@@ -1,4 +1,4 @@
-# Kitten Hatchery support
+# Club Kitten support
 
 Thanks for playing! If something isn't working, email [SUPPORT EMAIL] with:
 

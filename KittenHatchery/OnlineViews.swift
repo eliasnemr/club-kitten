@@ -38,7 +38,7 @@ struct OnlineStatusCard: View {
                         }
                         Spacer()
                         if let c = online.friendCode {
-                            ShareLink(item: "Visit my cat lounge in Kitten Hatchery! My friend code is \(c)") {
+                            ShareLink(item: "Visit my cat lounge in Club Kitten! My friend code is \(c)") {
                                 Text("Share").font(Theme.font(14, .bold)).padding(.horizontal, 16).frame(height: 40)
                                     .overlay(Capsule().stroke(Theme.border, lineWidth: 1))
                             }

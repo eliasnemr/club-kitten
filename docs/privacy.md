@@ -1,8 +1,8 @@
-# Kitten Hatchery privacy policy
+# Club Kitten privacy policy
 
 _Last updated: September 25, 2026_
 
-Kitten Hatchery does not collect, store or share any personal information.
+Club Kitten does not collect, store or share any personal information.
 
 - Your cats, eggs, coins and lounge are saved only on your device.
 - There are no accounts, no ads, no analytics and no tracking.

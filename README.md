@@ -1,4 +1,4 @@
-# Kitten Hatchery
+# Club Kitten
 
 A cozy SwiftUI iPhone game: hatch kittens from mystery eggs, raise them from Kitten to Legend, battle, play minigames and decorate your Cat Lounge. Art and idle animations were made with Higgsfield.
 

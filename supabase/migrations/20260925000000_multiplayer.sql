@@ -1,4 +1,4 @@
--- Kitten Hatchery multiplayer: profiles, friends, guestbooks, playdates and egg grants.
+-- Club Kitten multiplayer: profiles, friends, guestbooks, playdates and egg grants.
 -- Clients never write friendships, playdates or eggs directly; they go through the
 -- security-definer functions below so limits and egg rolls are decided by the server.
 

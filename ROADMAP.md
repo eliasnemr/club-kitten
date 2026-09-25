@@ -1,4 +1,4 @@
-# Kitten Hatchery roadmap
+# Club Kitten roadmap
 
 ## ⏸ Paused: online multiplayer (Supabase + Game Center)
 

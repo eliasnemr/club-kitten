@@ -16,7 +16,7 @@ struct DenView: View {
                 stats(cat)
                 actions(cat)
             } else {
-                ScreenHeader(eyebrow: "Your den", title: "Kitten Hatchery") { CoinPill() }
+                ScreenHeader(eyebrow: "Your den", title: "Club Kitten") { CoinPill() }
                 NoCatYet()
             }
         }
