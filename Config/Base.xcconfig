@@ -3,5 +3,7 @@
 // Use SUPABASE_PROJECT_REF = local to talk to `supabase start` on this Mac.
 SUPABASE_PROJECT_REF =
 SUPABASE_ANON_KEY =
+// Cloud save turns on with the keys above. Multiplayer (friends, lounges, playdates) is separate.
+SUPABASE_MULTIPLAYER = NO
 
 #include? "Secrets.xcconfig"

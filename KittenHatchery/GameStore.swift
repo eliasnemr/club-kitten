@@ -23,6 +23,8 @@ struct SaveData: Codable {
     var challenges: [DailyChallenge] = []
     var streak = 0
     var lastBonusDay = ""
+    /// Goes up on every save; the cloud keeps whichever copy has the highest number.
+    var saveVersion = 0
 
     init() {}
 
@@ -56,6 +58,7 @@ struct SaveData: Codable {
         challenges = try c.decodeIfPresent([DailyChallenge].self, forKey: .challenges) ?? []
         streak = try c.decodeIfPresent(Int.self, forKey: .streak) ?? 0
         lastBonusDay = try c.decodeIfPresent(String.self, forKey: .lastBonusDay) ?? ""
+        saveVersion = try c.decodeIfPresent(Int.self, forKey: .saveVersion) ?? 0
     }
 }
 
@@ -99,7 +102,7 @@ final class GameStore {
     var invite: UUID?
     /// Supabase + Game Center, when configured. Nil means offline practice friends.
     let online: OnlineService?
-    var isOnline: Bool { online?.isOnline == true }
+    var isOnline: Bool { online?.isLive == true }
 
     private let key = "kitten-hatchery-save-v1"
 
@@ -125,11 +128,11 @@ final class GameStore {
     var discovered: Set<Breed> { Set(data.cats.map(\.kind)) }
     var lounge: Lounge { data.lounge }
     var friends: [Friend] {
-        if let online, online.isOnline { return online.friends.map(\.asFriend) }
+        if let online, online.isLive { return online.friends.map(\.asFriend) }
         return data.friends
     }
     var guestbook: [GuestEntry] {
-        if let online, online.isOnline { return online.guestbook.map(\.asEntry) }
+        if let online, online.isLive { return online.guestbook.map(\.asEntry) }
         return data.guestbook
     }
     var nest: [NestEgg] { data.nest }
@@ -450,7 +453,7 @@ final class GameStore {
     }
 
     func thank(_ id: UUID) {
-        if let online, online.isOnline {
+        if let online, online.isLive {
             online.thank(id)
             if let e = online.guestbook.first(where: { $0.id == id }),
                let f = online.friends.first(where: { $0.displayName == e.visitorName }) { online.bump(f.id, 2) }
@@ -465,7 +468,7 @@ final class GameStore {
     // MARK: Friends
 
     func befriend(_ id: UUID, _ amount: Int) {
-        if let online, online.isOnline {
+        if let online, online.isLive {
             online.bump(id, amount)
             return
         }
@@ -477,7 +480,7 @@ final class GameStore {
     func giveTreat(to id: UUID) -> Bool {
         guard spendCoins(Self.treatPrice) else { return false }
         befriend(id, 3)
-        if let online, online.isOnline {
+        if let online, online.isLive {
             Task { try? await online.sign(id, sticker: 4, phrase: nil, gift: "treat") }
         }
         return true
@@ -560,11 +563,25 @@ final class GameStore {
 
     // MARK: Persistence
 
+    var saveVersion: Int { data.saveVersion }
+
     private func save() {
+        data.saveVersion += 1
         if let raw = try? JSONEncoder().encode(data) {
             UserDefaults.standard.set(raw, forKey: key)
         }
+        online?.saveChanged()
         online?.pushProfile()
+    }
+
+    /// Replaces this phone's game with a newer copy from the cloud (after a reinstall, for example).
+    func restoreFromCloud(_ saved: SaveData) {
+        data = saved
+        pendingHatch = nil
+        visitor = nil
+        if let raw = try? JSONEncoder().encode(data) {
+            UserDefaults.standard.set(raw, forKey: key)
+        }
     }
 
     #if DEBUG

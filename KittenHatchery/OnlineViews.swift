@@ -18,7 +18,7 @@ struct OnlineStatusCard: View {
     @State private var adding = false
 
     var body: some View {
-        if let online = store.online {
+        if let online = store.online, online.multiplayer {
             Card {
                 HStack(spacing: 10) {
                     Circle().fill(online.isOnline ? Theme.success : (online.status == .connecting ? Theme.warning : Theme.rose))
@@ -364,5 +364,51 @@ struct OnlinePlaydateView: View {
         if text.contains("No playdates left") { return "No playdates left today. Come back tomorrow!" }
         if text.contains("expired") { return "That invite has expired." }
         return "Couldn't start the playdate. Check your connection and try again."
+    }
+}
+
+// MARK: - Cloud save status
+
+/// A quiet line in the Den showing whether progress is backed up.
+struct CloudSaveBadge: View {
+    @Environment(GameStore.self) private var store
+
+    var body: some View {
+        if let online = store.online {
+            TimelineView(.periodic(from: .now, by: 30)) { _ in
+                HStack(spacing: 6) {
+                    Image(systemName: icon(online)).font(.system(size: 12, weight: .semibold))
+                    Text(text(online)).font(Theme.font(12, .semibold))
+                }
+                .foregroundStyle(color(online))
+                .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    private func icon(_ o: OnlineService) -> String {
+        switch o.sync {
+        case .synced: "checkmark.icloud.fill"
+        case .syncing: "arrow.triangle.2.circlepath.icloud"
+        case .failed: "icloud.slash"
+        case .idle: "icloud"
+        }
+    }
+
+    private func text(_ o: OnlineService) -> String {
+        switch o.sync {
+        case .synced(let at):
+            let ago = Date().timeIntervalSince(at)
+            return ago < 60 ? "Progress saved to the cloud" : "Saved to the cloud \(formatDuration(ago)) ago"
+        case .syncing: return "Saving to the cloud…"
+        case .failed: return "Offline · progress is saved on this phone"
+        case .idle: return "Connecting cloud save…"
+        }
+    }
+
+    private func color(_ o: OnlineService) -> Color {
+        if case .failed = o.sync { return Theme.muted }
+        return Theme.success
     }
 }

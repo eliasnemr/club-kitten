@@ -15,6 +15,7 @@ struct DenView: View {
                 stage(cat)
                 stats(cat)
                 actions(cat)
+                CloudSaveBadge()
             } else {
                 ScreenHeader(eyebrow: "Your den", title: "Club Kitten") { CoinPill() }
                 NoCatYet()

@@ -6,6 +6,8 @@
 	<string>$(SUPABASE_PROJECT_REF)</string>
 	<key>SupabaseAnonKey</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>SupabaseMultiplayer</key>
+	<string>$(SUPABASE_MULTIPLAYER)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSGKFriendListUsageDescription</key>

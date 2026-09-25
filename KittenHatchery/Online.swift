@@ -4,7 +4,7 @@ import Supabase
 
 // MARK: - Configuration
 
-// Multiplayer is paused: the app runs locally with practice friends until Supabase keys are added.
+// With Supabase keys the app gets cloud save. Multiplayer stays paused until SUPABASE_MULTIPLAYER = YES.
 // Resume with the checklist in ROADMAP.md (and MULTIPLAYER.md for the full steps).
 #warning("Multiplayer paused — see ROADMAP.md to set up Supabase + Game Center")
 
@@ -15,8 +15,18 @@ enum OnlineConfig {
         let ref = (info["SupabaseProjectRef"] as? String ?? "").trimmingCharacters(in: .whitespaces)
         let key = (info["SupabaseAnonKey"] as? String ?? "").trimmingCharacters(in: .whitespaces)
         guard !ref.isEmpty, !key.isEmpty else { return nil }
+        #if !DEBUG
+        // The Supabase running on your Mac only exists in development; release builds stay offline.
+        if ref == "local" { return nil }
+        #endif
         let url = ref == "local" ? URL(string: "http://127.0.0.1:54321")! : URL(string: "https://\(ref).supabase.co")!
         return SupabaseClient(supabaseURL: url, supabaseKey: key)
+    }()
+
+    /// Friends, lounge visits and playdates. Off unless SUPABASE_MULTIPLAYER = YES.
+    static let multiplayer: Bool = {
+        let raw = (Bundle.main.infoDictionary?["SupabaseMultiplayer"] as? String ?? "").uppercased()
+        return raw == "YES" || raw == "TRUE" || raw == "1"
     }()
 }
 
@@ -187,28 +197,169 @@ final class OnlineService {
     @ObservationIgnored private var inviteChannel: RealtimeChannelV2?
     @ObservationIgnored private var pushTask: Task<Void, Never>?
 
-    init(client: SupabaseClient) {
+    /// Friends, lounges and playdates are only live when multiplayer is switched on.
+    let multiplayer: Bool
+
+    // Cloud save
+    enum SyncState: Equatable { case idle, syncing, synced(Date), failed }
+    private(set) var sync: SyncState = .idle
+    @ObservationIgnored private var syncReady = false
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
+
+    init(client: SupabaseClient, multiplayer: Bool = OnlineConfig.multiplayer) {
         self.client = client
+        self.multiplayer = multiplayer
     }
 
+    /// Signed in to the server (cloud save works).
     var isOnline: Bool { status == .online }
+    /// Signed in and multiplayer switched on.
+    var isLive: Bool { isOnline && multiplayer }
 
     func start() async {
         do {
-            if client.auth.currentUser == nil {
-                try await client.auth.signInAnonymously()
+            // Reuse the saved session (kept in the Keychain) or start a new anonymous account.
+            if let session = try? await client.auth.session {
+                me = session.user.id
+            } else {
+                me = try await client.auth.signInAnonymously().user.id
             }
-            me = client.auth.currentUser?.id
             status = .online
         } catch {
             status = .failed("Couldn't reach the server: \(error.localizedDescription)")
+            sync = .failed
             return
         }
+        await syncOnLaunch()
+        guard multiplayer else { return }
         await linkGameCenter()
         await refresh()
         pushProfile()
         await openMyLounge()
         await watchInvites()
+    }
+
+    // MARK: Cloud save
+
+    private struct SaveRow: Decodable {
+        let data: AnyJSON
+        let version: Int
+    }
+    private struct PushParams: Encodable {
+        let p_data: AnyJSON
+        let p_version: Int
+        let p_device: String
+    }
+    private struct PushResult: Decodable {
+        let accepted: Bool
+        let version: Int
+    }
+
+    /// A random ID for this install, so the server can tell devices apart.
+    private static var deviceID: String {
+        let key = "club-kitten-device-id"
+        if let id = UserDefaults.standard.string(forKey: key) { return id }
+        let id = UUID().uuidString
+        UserDefaults.standard.set(id, forKey: key)
+        return id
+    }
+
+    /// On launch: restore a newer save from the server (a reinstall or restored account),
+    /// or upload this phone's save if it is newer.
+    func syncOnLaunch() async {
+        guard let me, store != nil else { debugLog("not signed in yet"); return }
+        debugLog("syncing as \(me)")
+        sync = .syncing
+        do {
+            let remote = try await fetchRemote(me)
+            guard let store else { return }
+            if let remote, !hasSynced(me) || remote.version > store.saveVersion {
+                // A phone that has never synced this account (a reinstall or new phone) always
+                // takes the server's copy, so a fresh starter save can never overwrite real progress.
+                try restore(remote)
+                markSynced(me)
+                syncReady = true
+                sync = .synced(Date())
+            } else if remote == nil || store.saveVersion > remote!.version {
+                syncReady = true
+                try await upload()
+                markSynced(me)
+            } else {
+                syncReady = true
+                markSynced(me)
+                sync = .synced(Date())
+            }
+        } catch {
+            syncReady = true
+            sync = .failed
+            debugLog("sync on launch failed: \(error)")
+        }
+    }
+
+    private func fetchRemote(_ me: UUID) async throws -> SaveRow? {
+        let rows: [SaveRow] = try await client.from("saves").select("data, version")
+            .eq("user_id", value: me).execute().value
+        return rows.first
+    }
+
+    private func restore(_ remote: SaveRow) throws {
+        let raw = try JSONEncoder().encode(remote.data)
+        var restored = try JSONDecoder().decode(SaveData.self, from: raw)
+        restored.saveVersion = remote.version
+        store?.restoreFromCloud(restored)
+        debugLog("restored version \(remote.version)")
+    }
+
+    /// Whether this install has synced with this account before (kept outside the save itself).
+    private func hasSynced(_ me: UUID) -> Bool { UserDefaults.standard.bool(forKey: "club-kitten-synced-\(me)") }
+    private func markSynced(_ me: UUID) { UserDefaults.standard.set(true, forKey: "club-kitten-synced-\(me)") }
+
+    private func debugLog(_ text: String) {
+        #if DEBUG
+        print("[cloud save] \(text)")
+        #endif
+    }
+
+    /// Called after every local save; uploads a few seconds later so bursts of changes send once.
+    func saveChanged() {
+        guard syncReady, isOnline else { return }
+        saveTask?.cancel()
+        saveTask = Task {
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            try? await upload()
+        }
+    }
+
+    /// Uploads right away, for when the app goes to the background.
+    func flushSave() {
+        guard syncReady, isOnline else { return }
+        saveTask?.cancel()
+        saveTask = Task { try? await upload() }
+    }
+
+    private func upload() async throws {
+        guard let store else { return }
+        sync = .syncing
+        do {
+            let raw = try JSONEncoder().encode(store.data)
+            let json = try JSONDecoder().decode(AnyJSON.self, from: raw)
+            let r: PushResult = try await client.rpc("push_save", params: PushParams(
+                p_data: json, p_version: store.saveVersion, p_device: Self.deviceID)).execute().value
+            if !r.accepted {
+                // The server already has this version or a newer one (from another device): take it
+                // instead of retrying, so two copies can't bounce back and forth.
+                if let me, let remote = try await fetchRemote(me) { try restore(remote) }
+                sync = .synced(Date())
+                return
+            }
+            debugLog("uploaded version \(r.version)")
+            sync = .synced(Date())
+        } catch {
+            sync = .failed
+            debugLog("upload failed: \(error)")
+            throw error
+        }
     }
 
     // MARK: Game Center
@@ -258,7 +409,7 @@ final class OnlineService {
 
     /// Sends your lounge and top five cats so friends see them when they visit. Debounced.
     func pushProfile() {
-        guard isOnline, let me, let store else { return }
+        guard isLive, let me, let store else { return }
         pushTask?.cancel()
         let lounge = store.lounge
         let showcase = Array(store.cats.sorted { $0.rarity > $1.rarity || ($0.rarity == $1.rarity && $0.level > $1.level) }.prefix(5))

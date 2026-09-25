@@ -24,7 +24,7 @@ struct LoungeView: View {
                     RoomView(lounge: store.lounge, residents: store.cats, guests: guests, height: 400,
                              bubbles: bubbles, shelfBreeds: shelfBreeds, portrait: store.activeCat?.kind,
                              onPetCat: { cat in if store.cats.contains(where: { $0.id == cat.id }) { store.record(.petCats) } })
-                    if let online = store.online, online.isOnline {
+                    if let online = store.online, online.isLive {
                         if let v = online.visitors.first, let f = store.friend(v.userID) { visitorBanner(f) }
                     } else if let v = store.visitor, let f = store.friend(v.friendID) {
                         visitorBanner(f)
@@ -78,7 +78,7 @@ struct LoungeView: View {
     }
 
     private var guests: [RoomGuest] {
-        if let online = store.online, online.isOnline {
+        if let online = store.online, online.isLive {
             return online.visitors.map { RoomGuest(cat: $0.cat, label: $0.name) }
         }
         guard let v = store.visitor, let f = store.friend(v.friendID) else { return [] }
@@ -86,7 +86,7 @@ struct LoungeView: View {
     }
 
     private var bubbles: [UUID: Bubble] {
-        if let online = store.online, online.isOnline {
+        if let online = store.online, online.isLive {
             var out: [UUID: Bubble] = [:]
             for v in online.visitors { if let m = online.visitorChat[v.userID] { out[v.cat.id] = m.bubble } }
             return out
@@ -226,7 +226,7 @@ struct FriendsView: View {
                 }
             }
             OnlineStatusCard()
-            if let online = store.online, online.isOnline {
+            if let online = store.online, online.isLive {
                 ForEach(online.invites) { inv in
                     if let f = store.friend(inv.hostID) { onlineInvite(inv, from: f) }
                 }
@@ -283,7 +283,7 @@ struct FriendsView: View {
                     }
                 }
             }
-            if store.online == nil {
+            if !store.isOnline {
                 Text("Sam, Mia and Leo are in-game pals who live in the neighbourhood. You get \(GameStore.playdatesPerDay) playdates a day.")
                     .font(Theme.font(12)).foregroundStyle(Theme.muted)
             } else {
@@ -408,7 +408,7 @@ struct VisitView: View {
                         guard !signed else { return }
                         signed = true
                         store.befriend(f.id, 1)
-                        if let online = store.online, online.isOnline {
+                        if let online = store.online, online.isLive {
                             let phrase = lastPhrase
                             Task { try? await online.sign(f.id, sticker: Int.random(in: 0..<Chat.stickers.count), phrase: phrase, gift: nil) }
                         }
@@ -441,7 +441,7 @@ struct VisitView: View {
             }
             .onAppear { store.record(.visitFriend) }
             .task {
-                guard let online = store.online, online.isOnline, session == nil else { return }
+                guard let online = store.online, online.isLive, session == nil else { return }
                 let s = online.visit(f.id, as: me)
                 session = s
                 await s.join()

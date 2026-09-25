@@ -1,5 +1,14 @@
 # Club Kitten roadmap
 
+## In progress: cloud save (v1.1)
+
+- [x] `saves` table and `push_save` (newest version wins), tested on local Supabase
+- [x] App uploads after changes and on background, restores after reinstall, never overwrites progress with a fresh install
+- [x] Cloud save works with multiplayer still off (`SUPABASE_MULTIPLAYER = NO`)
+- [ ] Game Center restore on a new phone: change `link-game-center` to sign in to the existing account instead of moving the Game Center ID
+- [ ] Create the real Supabase project and deploy both migrations
+- [ ] Update App Privacy answers and the privacy policy before shipping
+
 ## ⏸ Paused: online multiplayer (Supabase + Game Center)
 
 The code is in place but switched off. With no `Config/Secrets.xcconfig`, the app runs locally with the practice friends (Sam, Mia, Leo). Xcode shows a build warning from `Online.swift` as a reminder.

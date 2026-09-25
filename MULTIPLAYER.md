@@ -3,6 +3,19 @@
 Without keys the app runs in offline practice mode (Sam, Mia and Leo are simulated).
 With keys it signs in, links Game Center, and uses real friends, lounges, guestbooks and playdates.
 
+## Cloud save (works without multiplayer)
+
+With Supabase keys set, every install signs in anonymously and keeps its whole game in the `saves` table (migration `20260926000000_save_sync.sql`). Multiplayer stays off unless `SUPABASE_MULTIPLAYER = YES`.
+
+- The phone is the main copy. Each save bumps `saveVersion`; the app uploads 3 seconds after changes and again when it goes to the background.
+- `push_save` only stores a copy newer than the server's. A rejected upload downloads the server's copy instead of retrying.
+- A phone that has never synced with the account (a reinstall or restored Keychain) always takes the server's copy, so a fresh starter save can't overwrite progress.
+- The anonymous login lives in the Keychain, which survives deleting the app on the same phone. Restoring on a **new** phone needs the Game Center restore flow (not built yet; see ROADMAP.md).
+- `SUPABASE_PROJECT_REF = local` is ignored in Release builds.
+- Before shipping cloud save, update App Privacy (User ID and gameplay content, linked to the user, used for app functionality, not for tracking) and the privacy policy.
+
+**Building from ~/Documents:** if Documents syncs with iCloud Drive, keep Xcode's build output outside it (the default DerivedData location). Code signing fails on iCloud-synced build folders.
+
 ## What runs where
 
 | Piece | Where | Notes |

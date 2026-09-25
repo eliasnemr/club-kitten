@@ -15,6 +15,7 @@ struct KittenHatcheryApp: App {
 
 struct RootView: View {
     @Environment(GameStore.self) private var store
+    @Environment(\.scenePhase) private var scenePhase
     private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -29,6 +30,10 @@ struct RootView: View {
         .tint(Theme.rose)
         .onReceive(clock) { _ in store.tick() }
         .task { await store.online?.start() }
+        .onChange(of: scenePhase) { _, phase in
+            // Send the latest save before the app is suspended.
+            if phase == .background { store.online?.flushSave() }
+        }
         #if DEBUG
         .onAppear { applyDebugArguments() }
         #endif
@@ -59,6 +64,7 @@ extension RootView {
             store.pendingHatch = (cat, cat.rarity)
         }
         if args.contains("-visitor") { store.forceVisitor() }
+        if let i = args.firstIndex(of: "-addCoins"), i + 1 < args.count, let n = Int(args[i + 1]) { store.addCoins(n) }
         if let i = args.firstIndex(of: "-active"), i + 1 < args.count,
            let cat = store.cats.first(where: { $0.kind.rawValue == args[i + 1] }) {
             store.setActive(cat.id)
