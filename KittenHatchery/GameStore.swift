@@ -606,6 +606,18 @@ final class GameStore {
         online?.pushProfile()
     }
 
+    /// Wipes the game on this phone (after deleting the account, or "Erase game" offline).
+    func eraseEverything() {
+        data = SaveData()
+        pendingHatch = nil
+        visitor = nil
+        invite = nil
+        tab = .den
+        if let raw = try? JSONEncoder().encode(data) {
+            UserDefaults.standard.set(raw, forKey: key)
+        }
+    }
+
     /// Replaces this phone's game with a newer copy from the cloud (after a reinstall, for example).
     func restoreFromCloud(_ saved: SaveData) {
         data = saved

@@ -4,6 +4,7 @@ struct DenView: View {
     @Environment(GameStore.self) private var store
     @State private var hearts: [FloatingHeart] = []
     @State private var showSkills = false
+    @State private var showSettings = false
     @State private var squish = false
 
     var body: some View {
@@ -11,19 +12,30 @@ struct DenView: View {
             if let cat = store.activeCat {
                 ScreenHeader(eyebrow: "Your den", title: "\(cat.name) · Lv \(cat.level)") {
                     CoinPill()
+                    settingsButton
                 }
                 stage(cat)
                 stats(cat)
                 actions(cat)
                 CloudSaveBadge()
             } else {
-                ScreenHeader(eyebrow: "Your den", title: "Club Kitten") { CoinPill() }
+                ScreenHeader(eyebrow: "Your den", title: "Club Kitten") { CoinPill(); settingsButton }
                 NoCatYet()
             }
         }
+        .sheet(isPresented: $showSettings) { SettingsView().presentationDragIndicator(.visible) }
         .sheet(isPresented: $showSkills) {
             if let cat = store.activeCat { SkillsView(catID: cat.id) }
         }
+    }
+
+    private var settingsButton: some View {
+        Button { showSettings = true } label: {
+            Image(systemName: "gearshape.fill").font(.system(size: 16, weight: .semibold))
+                .frame(width: 40, height: 40).background(Circle().fill(.white))
+                .foregroundStyle(Theme.text)
+        }
+        .accessibilityLabel("Settings")
     }
 
     private func stage(_ cat: Cat) -> some View {

@@ -480,6 +480,31 @@ final class OnlineService {
 
     func isBlocked(_ player: UUID) -> Bool { blocked.contains { $0.id == player } }
 
+    // MARK: Account deletion
+
+    /// Deletes the account and everything stored with it on the server, signs out,
+    /// and starts a fresh anonymous account for a brand-new game.
+    func deleteAccount() async throws {
+        try await client.rpc("delete_my_account").execute()
+        if let me { UserDefaults.standard.removeObject(forKey: "club-kitten-synced-\(me)") }
+        try? await client.auth.signOut()
+        me = nil
+        friendCode = nil
+        gameCenterLinked = false
+        friends = []
+        guestbook = []
+        invites = []
+        visitors = []
+        blocked = []
+        syncReady = false
+        sync = .idle
+        status = .connecting
+        store?.eraseEverything()
+        // Start the fresh account in the background; Game Center sign-in can take a while
+        // and the deletion itself is already done.
+        Task { await start() }
+    }
+
     func addFriend(code: String) async throws {
         _ = try await client.rpc("add_friend_by_code", params: ["p_code": code]).execute()
         await refresh()

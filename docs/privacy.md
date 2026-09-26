@@ -31,7 +31,7 @@ No ads, no analytics, no tracking, no contacts, no location and no free-text cha
 
 ## Deleting your data
 
-Deleting the app removes the game from your device. To delete your account and everything stored with it, email us at eliasnemr@gmail.com and we will remove it within 30 days.
+Deleting the app removes the game from your device. To delete your account and everything stored with it, open **Den → Settings (gear) → Delete account and data**. It's deleted from our server straight away. You can also email us at eliasnemr@gmail.com and we will remove it within 30 days.
 
 ## Changes
 
