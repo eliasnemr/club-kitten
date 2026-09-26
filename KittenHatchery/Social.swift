@@ -215,6 +215,97 @@ struct PlacedItem: Codable, Identifiable, Equatable {
     var y: Double
     var flipped = false
     var tint: ItemTint?
+    /// Which place and which of its rooms the item is in. Older saves put everything in the lounge's first room.
+    var place: Location = .lounge
+    var room = 0
+
+    init(kind: Furniture, x: Double, y: Double, flipped: Bool = false, tint: ItemTint? = nil,
+         place: Location = .lounge, room: Int = 0) {
+        self.kind = kind
+        self.x = x
+        self.y = y
+        self.flipped = flipped
+        self.tint = tint
+        self.place = place
+        self.room = room
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        kind = try c.decode(Furniture.self, forKey: .kind)
+        x = try c.decode(Double.self, forKey: .x)
+        y = try c.decode(Double.self, forKey: .y)
+        flipped = try c.decodeIfPresent(Bool.self, forKey: .flipped) ?? false
+        tint = try? c.decodeIfPresent(ItemTint.self, forKey: .tint)
+        // Lenient, so a place added in a later version doesn't break an older friend's copy.
+        place = (try? c.decodeIfPresent(Location.self, forKey: .place)) ?? .lounge
+        room = max(0, try c.decodeIfPresent(Int.self, forKey: .room) ?? 0)
+    }
+}
+
+/// Places your cats can live in. Everyone starts with the small lounge; the rest are bought with coins.
+enum Location: String, Codable, CaseIterable, Identifiable {
+    case lounge, park, museum, mansion
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .lounge: "Lounge"
+        case .park: "Sunny Park"
+        case .museum: "Cat Museum"
+        case .mansion: "Mansion"
+        }
+    }
+    var blurb: String {
+        switch self {
+        case .lounge: "Your cozy starter home. Pick the walls, floor and wallpaper yourself."
+        case .park: "Blue skies, soft grass and a picket fence. Perfect for zoomies."
+        case .museum: "Marble floors and grand columns for showing off your finest furniture."
+        case .mansion: "Chandeliers, velvet walls and room after room of pure luxury."
+        }
+    }
+    var icon: String {
+        switch self {
+        case .lounge: "sofa.fill"
+        case .park: "tree.fill"
+        case .museum: "building.columns.fill"
+        case .mansion: "crown.fill"
+        }
+    }
+    var price: Int {
+        switch self {
+        case .lounge: 0
+        case .park: 500
+        case .museum: 1000
+        case .mansion: 2000
+        }
+    }
+    /// How many rooms this place can grow to.
+    var maxRooms: Int { self == .mansion ? 4 : 3 }
+    /// What one extra room is called here.
+    var roomWord: String {
+        switch self {
+        case .lounge: "room"
+        case .park: "meadow"
+        case .museum: "gallery"
+        case .mansion: "wing"
+        }
+    }
+    var roomPlural: String { self == .museum ? "galleries" : roomWord + "s" }
+    /// Price of the room at `index` (the first room, index 0, comes with the place). Each one costs more.
+    func roomPrice(_ index: Int) -> Int {
+        let base: Int
+        switch self {
+        case .lounge: base = 150
+        case .park: base = 200
+        case .museum: base = 300
+        case .mansion: base = 400
+        }
+        return base * max(1, index)
+    }
+    /// Only the lounge uses your own wall, floor and wallpaper choices; the others have their own look.
+    var customStyle: Bool { self == .lounge }
 }
 
 struct Lounge: Codable, Equatable {
@@ -228,8 +319,23 @@ struct Lounge: Codable, Equatable {
     var ownedPatterns: [WallPattern] = [.plain]
     var nameFirst = 0
     var nameSecond = 0
+    /// Where you are now; visitors arrive here too.
+    var place: Location = .lounge
+    var ownedPlaces: [Location] = [.lounge]
+    /// Rooms built per place, keyed by `Location.rawValue`. Missing means one room.
+    var roomCounts: [String: Int] = [:]
 
     var name: String { LoungeName.make(nameFirst, nameSecond) }
+
+    func rooms(in place: Location) -> Int {
+        min(place.maxRooms, max(1, roomCounts[place.rawValue] ?? 1))
+    }
+
+    func owns(_ place: Location) -> Bool { place == .lounge || ownedPlaces.contains(place) }
+
+    func items(in place: Location, room: Int) -> [PlacedItem] {
+        items.filter { $0.place == place && $0.room == room }
+    }
 
     init(items: [PlacedItem], wall: WallStyle = .cream, floor: FloorStyle = .oak) {
         self.items = items
@@ -249,6 +355,11 @@ struct Lounge: Codable, Equatable {
         ownedPatterns = try c.decodeIfPresent([WallPattern].self, forKey: .ownedPatterns) ?? [.plain]
         nameFirst = try c.decodeIfPresent(Int.self, forKey: .nameFirst) ?? 0
         nameSecond = try c.decodeIfPresent(Int.self, forKey: .nameSecond) ?? 0
+        let owned = ((try? c.decodeIfPresent([String].self, forKey: .ownedPlaces)) ?? nil)?.compactMap(Location.init(rawValue:)) ?? []
+        ownedPlaces = [.lounge] + owned.filter { $0 != .lounge }
+        roomCounts = (try? c.decodeIfPresent([String: Int].self, forKey: .roomCounts)) ?? nil ?? [:]
+        let at = (try? c.decodeIfPresent(Location.self, forKey: .place)) ?? nil ?? .lounge
+        place = ownedPlaces.contains(at) ? at : .lounge
     }
 
     static let starter = Lounge(items: [

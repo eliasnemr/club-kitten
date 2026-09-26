@@ -200,7 +200,7 @@ struct ShopItemSheet: View {
         var l = store.lounge
         let x = kind.onWall ? 0.5 : 0.55
         let y = kind.onWall ? 0.26 : 0.84
-        l.items.append(PlacedItem(kind: kind, x: x, y: y, tint: kind.tintable ? tint : nil))
+        l.items.append(PlacedItem(kind: kind, x: x, y: y, tint: kind.tintable ? tint : nil, place: l.place))
         return l
     }
 
@@ -314,11 +314,18 @@ struct TintPicker: View {
 struct DecorateView: View {
     @Environment(GameStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    /// The room being decorated, shared with the lounge so you come back to the same one.
+    @Binding var room: Int
 
     enum Section: String, CaseIterable, Identifiable {
         case storage, walls, floors, wallpaper, name
         var id: String { rawValue }
         var title: String { rawValue.capitalized }
+    }
+
+    /// Walls, floors and wallpaper only apply in the lounge; other places have their own look.
+    private var sections: [Section] {
+        store.lounge.place.customStyle ? Section.allCases : [.storage, .name]
     }
 
     @State private var selected: UUID?
@@ -329,6 +336,7 @@ struct DecorateView: View {
     @State private var second = 0
     /// A wall, floor or wallpaper you don't own yet, shown in the room until you buy or cancel.
     @State private var tryOn: StyleTryOn?
+    @State private var build: BuildOption?
 
     enum StyleTryOn: Equatable {
         case wall(WallStyle), floor(FloorStyle), pattern(WallPattern)
@@ -379,15 +387,33 @@ struct DecorateView: View {
                         .background(Capsule().fill(Theme.rose)).foregroundStyle(.white)
                 }
             }
-            RoomView(lounge: shown, residents: [], height: 290,
-                     shelfBreeds: Breed.allCases.reversed().filter { store.discovered.contains($0) },
-                     portrait: store.activeCat?.kind,
-                     editing: true, selectedItem: selected,
-                     onSelectItem: { id in Haptics.tap(); selected = id },
-                     onMoveItem: { id, x, y in store.moveItem(id, x: x, y: y) })
+            let place = store.lounge.place
+            let rooms = store.lounge.rooms(in: place)
+            PlacePicker(lounge: store.lounge, selected: place,
+                        pick: { p in selected = nil; tryOn = nil; withAnimation { room = 0; store.goTo(p) } },
+                        preview: { build = .place($0) })
+            RoomStage(room: $room, count: rooms, place: place,
+                      onExtend: store.nextRoomPrice(place) == nil ? nil : { build = .room(place) }) { r in
+                RoomView(lounge: shown, residents: [], height: 290,
+                         shelfBreeds: Breed.allCases.reversed().filter { store.discovered.contains($0) },
+                         portrait: store.activeCat?.kind,
+                         editing: true, selectedItem: selected,
+                         onSelectItem: { id in Haptics.tap(); selected = id },
+                         onMoveItem: { id, x, y in store.moveItem(id, x: x, y: y) },
+                         room: r)
+            }
                 .overlay(alignment: .bottomTrailing) {
                     if let id = selectedItem?.id {
                         HStack(spacing: 8) {
+                            if rooms > 1 {
+                                // Carries the item into the next room and follows it there.
+                                roundButton("arrow.right.square.fill", "Move to next \(place.roomWord)") {
+                                    let next = (room + 1) % rooms
+                                    store.moveItem(id, toRoom: next)
+                                    withAnimation { room = next }
+                                    note = "Moved to \(place.roomWord) \(next + 1)."
+                                }
+                            }
                             roundButton("arrow.left.and.right.righttriangle.left.righttriangle.right", "Flip") { store.flipItem(id) }
                             roundButton("tray.and.arrow.down.fill", "Put away") {
                                 store.storeItem(id)
@@ -408,12 +434,12 @@ struct DecorateView: View {
                         .scaleEffect(0.85, anchor: .trailing)
                 }
             } else {
-                Text(note ?? "Drag furniture to move it. Tap to select, then flip, recolour or put it away.")
+                Text(note ?? "Drag furniture to move it. Tap to select, then flip, recolour, put it away or carry it to another room.")
                     .font(Theme.font(13)).foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             Picker("Section", selection: $section) {
-                ForEach(Section.allCases) { Text($0.title).tag($0) }
+                ForEach(sections) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
             ScrollView {
@@ -450,9 +476,19 @@ struct DecorateView: View {
             #endif
         }
         .onChange(of: section) { _, _ in tryOn = nil }
+        .onChange(of: store.lounge.place) { _, _ in if !sections.contains(section) { section = .storage } }
+        .onChange(of: room) { _, new in
+            // Keep the selection only when the item came along to the new room.
+            if let item = selectedItem, item.room != new { selected = nil }
+        }
+        .sheet(item: $build) { option in
+            BuildSheet(option: option) { _, r in withAnimation { room = r } }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $showShop) {
             ShopView(placeNow: { kind, tint in
-                store.placeStored(kind, tint: tint)
+                store.placeStored(kind, tint: tint, room: room)
                 selected = store.lounge.items.last?.id
                 note = "Placed your \(kind.title.lowercased()). Drag it where you like."
                 showShop = false
@@ -478,7 +514,7 @@ struct DecorateView: View {
                     ForEach(kinds) { kind in
                         Button {
                             Haptics.tap(.medium)
-                            store.placeStored(kind)
+                            store.placeStored(kind, room: room)
                             selected = store.lounge.items.last?.id
                             note = "Placed your \(kind.title.lowercased())."
                         } label: {

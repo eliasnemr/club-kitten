@@ -11,8 +11,11 @@ struct LoungeView: View {
     @State private var playdate: Friend?
     @State private var request: PlaydateRequest?
     @State private var limitAlert = false
+    @State private var room = 0
+    @State private var build: BuildOption?
 
     var body: some View {
+        let place = store.lounge.place
         NavigationStack {
             Screen {
                 ScreenHeader(eyebrow: "Your lounge", title: store.lounge.name) {
@@ -21,9 +24,16 @@ struct LoungeView: View {
                 if store.cats.isEmpty {
                     NoCatYet()
                 } else {
-                    RoomView(lounge: store.lounge, residents: store.cats, guests: guests, height: 400,
-                             bubbles: bubbles, shelfBreeds: shelfBreeds, portrait: store.activeCat?.kind,
-                             onPetCat: { cat in if store.cats.contains(where: { $0.id == cat.id }) { store.record(.petCats) } })
+                    PlacePicker(lounge: store.lounge, selected: place,
+                                pick: { p in withAnimation { room = 0; store.goTo(p) } },
+                                preview: { build = .place($0) })
+                    RoomStage(room: $room, count: store.lounge.rooms(in: place), place: place,
+                              onExtend: store.nextRoomPrice(place) == nil ? nil : { build = .room(place) }) { r in
+                        RoomView(lounge: store.lounge, residents: store.cats, guests: guests, height: 400,
+                                 bubbles: bubbles, shelfBreeds: shelfBreeds, portrait: store.activeCat?.kind,
+                                 onPetCat: { cat in if store.cats.contains(where: { $0.id == cat.id }) { store.record(.petCats) } },
+                                 room: r)
+                    }
                     if let online = store.online, online.isLive {
                         if let v = online.visitors.first, let f = store.friend(v.userID) { visitorBanner(f) }
                     } else if let v = store.visitor, let f = store.friend(v.friendID) {
@@ -35,17 +45,24 @@ struct LoungeView: View {
                         ActionTile(icon: "book.closed.fill", title: "Guests", badge: store.unthanked) { showGuestbook = true }
                         ActionTile(icon: "person.2.fill", title: "Friends") { showFriends = true }
                     }
-                    Text("Your cats wander here. Tap one to pet it. Friends who drop by can pet them and leave gifts.")
+                    Text(store.nextRoomPrice(place) != nil && store.lounge.rooms(in: place) == 1
+                         ? "Your cats wander here. Tap one to pet it. Need more space? Tap + to build another \(place.roomWord)."
+                         : "Your cats wander here. Tap one to pet it. Friends who drop by can pet them and leave gifts.")
                         .font(Theme.font(13)).foregroundStyle(Theme.muted)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showFriends) { FriendsView() }
         }
-        .fullScreenCover(isPresented: $showDecorate) { DecorateView() }
+        .fullScreenCover(isPresented: $showDecorate) { DecorateView(room: $room) }
+        .sheet(item: $build) { option in
+            BuildSheet(option: option) { _, r in withAnimation { room = r } }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
         .fullScreenCover(isPresented: $showShop) {
             ShopView(placeNow: { kind, tint in
-                store.placeStored(kind, tint: tint)
+                store.placeStored(kind, tint: tint, room: room)
                 showShop = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { showDecorate = true }
             })
@@ -69,6 +86,11 @@ struct LoungeView: View {
             if args.contains("-shop") { showShop = true }
             if args.contains("-guestbook") { showGuestbook = true }
             if args.contains("-friends") { showFriends = true }
+            if let i = args.firstIndex(of: "-place"), i + 1 < args.count, let p = Location(rawValue: args[i + 1]) {
+                if store.lounge.owns(p) { store.goTo(p) } else { build = .place(p) }
+            }
+            if let i = args.firstIndex(of: "-room"), i + 1 < args.count, let r = Int(args[i + 1]) { room = r }
+            if args.contains("-extend") { build = .room(store.lounge.place) }
         }
         #endif
     }
@@ -371,6 +393,8 @@ struct VisitView: View {
     @State private var limitAlert = false
     @State private var session: LoungeSession?
     @State private var lastPhrase: Int?
+    @State private var visitPlace: Location?
+    @State private var visitRoom = 0
 
     var body: some View {
         if let f = store.friend(friendID), let me = store.activeCat {
@@ -379,8 +403,16 @@ struct VisitView: View {
                     Pill(icon: "person.2.fill", text: "\(visitors(me).count) visiting")
                     PlayerSafetyMenu(playerID: f.id, name: f.name, context: .lounge) { dismiss() }
                 }
-                RoomView(lounge: f.lounge, residents: f.cats, guests: visitors(me),
-                         height: 340, bubbles: allBubbles, shelfBreeds: f.cats.map(\.kind), portrait: f.star.kind, onPetCat: { cat in pet(cat, friend: f) })
+                let place = visitPlace ?? f.lounge.place
+                if f.lounge.ownedPlaces.count > 1 {
+                    PlacePicker(lounge: f.lounge, selected: place, ownedOnly: true,
+                                pick: { p in withAnimation { visitRoom = 0; visitPlace = p } })
+                }
+                RoomStage(room: $visitRoom, count: f.lounge.rooms(in: place), place: place) { r in
+                    RoomView(lounge: f.lounge, residents: f.cats, guests: visitors(me),
+                             height: 340, bubbles: allBubbles, shelfBreeds: f.cats.map(\.kind), portrait: f.star.kind,
+                             onPetCat: { cat in pet(cat, friend: f) }, place: place, room: r)
+                }
                 if let toast {
                     Text(toast).font(Theme.font(13, .semibold)).foregroundStyle(Theme.rose)
                         .frame(maxWidth: .infinity).transition(.opacity)

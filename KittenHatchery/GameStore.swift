@@ -435,12 +435,56 @@ final class GameStore {
         save()
     }
 
-    func placeStored(_ kind: Furniture, tint: ItemTint? = nil) {
+    /// Puts an item from storage into the room you're looking at in your current place.
+    func placeStored(_ kind: Furniture, tint: ItemTint? = nil, room: Int = 0) {
         guard let i = data.lounge.stored.firstIndex(of: kind) else { return }
         data.lounge.stored.remove(at: i)
         let (x, y) = placementSpot(for: kind)
-        data.lounge.items.append(PlacedItem(kind: kind, x: x, y: y, tint: kind.tintable ? tint : nil))
+        let place = data.lounge.place
+        data.lounge.items.append(PlacedItem(kind: kind, x: x, y: y, tint: kind.tintable ? tint : nil,
+                                            place: place, room: min(room, data.lounge.rooms(in: place) - 1)))
         save()
+    }
+
+    func moveItem(_ id: UUID, toRoom room: Int) {
+        guard let i = data.lounge.items.firstIndex(where: { $0.id == id }) else { return }
+        let place = data.lounge.items[i].place
+        data.lounge.items[i].room = min(max(0, room), data.lounge.rooms(in: place) - 1)
+        save()
+    }
+
+    // MARK: Places and rooms
+
+    func goTo(_ place: Location) {
+        guard data.lounge.owns(place), data.lounge.place != place else { return }
+        data.lounge.place = place
+        save()
+    }
+
+    /// Buys a new place and moves you there. Returns false without enough coins.
+    func buyPlace(_ place: Location) -> Bool {
+        guard !data.lounge.owns(place), spendCoins(place.price) else { return false }
+        data.lounge.ownedPlaces.append(place)
+        data.lounge.place = place
+        record(.shop)
+        save()
+        return true
+    }
+
+    /// Price of the next room for a place, or nil when it's already as big as it gets.
+    func nextRoomPrice(_ place: Location) -> Int? {
+        let n = data.lounge.rooms(in: place)
+        return n < place.maxRooms ? place.roomPrice(n) : nil
+    }
+
+    /// Builds one more room onto a place you own. Returns the new room's index.
+    func extend(_ place: Location) -> Int? {
+        guard data.lounge.owns(place), let price = nextRoomPrice(place), spendCoins(price) else { return nil }
+        let n = data.lounge.rooms(in: place)
+        data.lounge.roomCounts[place.rawValue] = n + 1
+        record(.shop)
+        save()
+        return n
     }
 
     func moveItem(_ id: UUID, x: Double, y: Double) {
@@ -662,6 +706,15 @@ final class GameStore {
         lounge.ownedWalls = [.cream, .blush]
         lounge.nameFirst = 2
         lounge.nameSecond = 2
+        // A second lounge room and a park, so rooms and places are there to try.
+        lounge.roomCounts = ["lounge": 2]
+        lounge.ownedPlaces = [.lounge, .park]
+        lounge.items += [PlacedItem(kind: .painting, x: 0.3, y: 0.24, room: 1),
+                         PlacedItem(kind: .sofa, x: 0.62, y: 0.82, room: 1),
+                         PlacedItem(kind: .lamp, x: 0.14, y: 0.8, room: 1),
+                         PlacedItem(kind: .hammock, x: 0.3, y: 0.82, place: .park),
+                         PlacedItem(kind: .catTree, x: 0.78, y: 0.78, place: .park),
+                         PlacedItem(kind: .yarnBasket, x: 0.55, y: 0.92, place: .park)]
         data.lounge = lounge
         data.challenges = ChallengeBook.make(for: ChallengeBook.dayKey(), social: true)
         data.challengeDay = ChallengeBook.dayKey()

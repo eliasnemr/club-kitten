@@ -279,6 +279,9 @@ struct RoomView: View {
     var onSelectItem: (UUID) -> Void = { _ in }
     var onMoveItem: (UUID, Double, Double) -> Void = { _, _, _ in }
     var onPetCat: (Cat) -> Void = { _ in }
+    /// Which place and room to show. Defaults to where the owner is, first room.
+    var place: Location? = nil
+    var room = 0
 
     @State private var spots: [UUID: CGPoint] = [:]
     @State private var facingLeft: Set<UUID> = []
@@ -293,20 +296,24 @@ struct RoomView: View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
             let scale = w / 340
+            let at = place ?? lounge.place
             ZStack(alignment: .topLeading) {
-                Rectangle().fill(lounge.wall.color).frame(height: h * 0.55)
-                WallPatternView(pattern: lounge.pattern).frame(height: h * 0.55).allowsHitTesting(false)
+                PlaceBackdrop(place: at, lounge: lounge, room: room)
+                    .frame(width: w, height: h)
+                    .allowsHitTesting(false)
                 if showSign {
-                    Text(lounge.name).font(Theme.font(11 * scale, .heavy)).foregroundStyle(Theme.text)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(.white).shadow(color: .black.opacity(0.1), radius: 2, y: 1))
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Rarity.legendary.color.opacity(0.5), lineWidth: 1.5))
-                        .padding(10)
-                        .zIndex(200)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(lounge.name).font(Theme.font(11 * scale, .heavy)).foregroundStyle(Theme.text)
+                        if at != .lounge {
+                            Text(at.title).font(Theme.font(9 * scale, .bold)).foregroundStyle(Theme.muted)
+                        }
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(.white).shadow(color: .black.opacity(0.1), radius: 2, y: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Rarity.legendary.color.opacity(0.5), lineWidth: 1.5))
+                    .padding(10)
+                    .zIndex(200)
                 }
-                LinearGradient(colors: lounge.floor.colors, startPoint: .top, endPoint: .bottom)
-                    .frame(height: h * 0.45).offset(y: h * 0.55)
-                Rectangle().fill(.white.opacity(0.7)).frame(height: 6).offset(y: h * 0.55 - 3)
                 if editing {
                     Canvas { ctx, size in
                         for x in stride(from: 0, through: size.width, by: 28) {
@@ -319,7 +326,7 @@ struct RoomView: View {
                     .allowsHitTesting(false)
                 }
 
-                ForEach(lounge.items) { item in
+                ForEach(lounge.items(in: at, room: room)) { item in
                     itemView(item, w: w, h: h, scale: scale)
                 }
                 ForEach(everyone, id: \.cat.id) { entry in
@@ -405,6 +412,191 @@ struct RoomView: View {
             if to.x < from.x { facingLeft.insert(mover) } else { facingLeft.remove(mover) }
             withAnimation(.easeInOut(duration: 2.4)) { spots[mover] = to }
         }
+    }
+}
+
+// MARK: - Place backdrops
+
+/// The walls and floor of a place. The wall meets the floor at 55% of the height in every place,
+/// so furniture positions work the same everywhere.
+struct PlaceBackdrop: View {
+    let place: Location
+    let lounge: Lounge
+    var room = 0
+
+    var body: some View {
+        switch place {
+        case .lounge:
+            GeometryReader { geo in
+                let h = geo.size.height
+                ZStack(alignment: .topLeading) {
+                    Rectangle().fill(lounge.wall.color).frame(height: h * 0.55)
+                    WallPatternView(pattern: lounge.pattern).frame(height: h * 0.55)
+                    LinearGradient(colors: lounge.floor.colors, startPoint: .top, endPoint: .bottom)
+                        .frame(height: h * 0.45).offset(y: h * 0.55)
+                    Rectangle().fill(.white.opacity(0.7)).frame(height: 6).offset(y: h * 0.55 - 3)
+                }
+            }
+        case .park: Canvas { ctx, size in Self.park(&ctx, size, room) }
+        case .museum: Canvas { ctx, size in Self.museum(&ctx, size, room) }
+        case .mansion: Canvas { ctx, size in Self.mansion(&ctx, size, room) }
+        }
+    }
+
+    private static func rgb(_ r: Double, _ g: Double, _ b: Double, _ a: Double = 1) -> GraphicsContext.Shading {
+        .color(Color(red: r, green: g, blue: b).opacity(a))
+    }
+
+    /// A repeatable 0–1 number, so each room looks a bit different but never changes between redraws.
+    private static func jitter(_ room: Int, _ i: Int) -> Double {
+        let v = sin(Double(room * 97 + i * 131) * 12.9898) * 43758.5453
+        return v - v.rounded(.down)
+    }
+
+    private static func park(_ ctx: inout GraphicsContext, _ size: CGSize, _ room: Int) {
+        let w = size.width, h = size.height, horizon = h * 0.55
+        ctx.clip(to: Path(CGRect(origin: .zero, size: size)))
+        ctx.fill(Path(CGRect(x: 0, y: 0, width: w, height: horizon)),
+                 with: .linearGradient(Gradient(colors: [Color(red: 0.62, green: 0.83, blue: 0.98), Color(red: 0.88, green: 0.95, blue: 1)]),
+                                       startPoint: .zero, endPoint: CGPoint(x: 0, y: horizon)))
+        if room == 0 {
+            ctx.fill(Path(ellipseIn: CGRect(x: w * 0.78, y: h * 0.06, width: w * 0.12, height: w * 0.12)), with: rgb(1, 0.87, 0.45))
+        }
+        for i in 0..<3 {
+            let cx = w * (0.1 + 0.8 * jitter(room, i)), cy = h * (0.08 + 0.14 * jitter(room, i + 10)), r = w * 0.05
+            for (dx, dy, k) in [(-1.1, 0.2, 0.8), (0.0, 0.0, 1.0), (1.1, 0.25, 0.75)] {
+                ctx.fill(Path(ellipseIn: CGRect(x: cx + dx * r - r * k, y: cy + dy * r - r * k, width: 2 * r * k, height: 2 * r * k)),
+                         with: .color(.white.opacity(0.95)))
+            }
+        }
+        // Rolling hills and trees behind the fence.
+        ctx.fill(Path(ellipseIn: CGRect(x: -w * 0.3, y: horizon - h * 0.16, width: w * 0.95, height: h * 0.4)), with: rgb(0.66, 0.84, 0.56))
+        ctx.fill(Path(ellipseIn: CGRect(x: w * 0.4, y: horizon - h * 0.12, width: w * 0.95, height: h * 0.4)), with: rgb(0.6, 0.8, 0.5))
+        for i in 0..<2 {
+            let tx = w * (i == 0 ? 0.12 + 0.2 * jitter(room, 20) : 0.62 + 0.25 * jitter(room, 21)), base = horizon - h * 0.08
+            ctx.fill(Path(roundedRect: CGRect(x: tx - 4, y: base - h * 0.1, width: 8, height: h * 0.1), cornerRadius: 3), with: rgb(0.55, 0.4, 0.28))
+            ctx.fill(Path(ellipseIn: CGRect(x: tx - w * 0.07, y: base - h * 0.2, width: w * 0.14, height: h * 0.14)), with: rgb(0.42, 0.68, 0.4))
+        }
+        // Grass.
+        ctx.fill(Path(CGRect(x: 0, y: horizon, width: w, height: h - horizon)),
+                 with: .linearGradient(Gradient(colors: [Color(red: 0.6, green: 0.81, blue: 0.48), Color(red: 0.48, green: 0.72, blue: 0.4)]),
+                                       startPoint: CGPoint(x: 0, y: horizon), endPoint: CGPoint(x: 0, y: h)))
+        let flowers: [GraphicsContext.Shading] = [.color(.white), rgb(1, 0.72, 0.8), rgb(1, 0.87, 0.4)]
+        for i in 0..<14 {
+            let fx = w * jitter(room, 40 + i), fy = horizon + 14 + (h - horizon - 20) * jitter(room, 70 + i)
+            ctx.fill(Path(ellipseIn: CGRect(x: fx - 3, y: fy - 3, width: 6, height: 6)), with: flowers[i % flowers.count])
+        }
+        // White picket fence along the horizon, where wall items can hang.
+        let top = horizon - h * 0.09
+        ctx.fill(Path(CGRect(x: 0, y: top + h * 0.02, width: w, height: 4)), with: .color(.white))
+        ctx.fill(Path(CGRect(x: 0, y: horizon - h * 0.03, width: w, height: 4)), with: .color(.white))
+        for x in stride(from: CGFloat(6), through: w, by: 18) {
+            var picket = Path()
+            picket.move(to: CGPoint(x: x, y: top))
+            picket.addLine(to: CGPoint(x: x + 5, y: top + 5))
+            picket.addLine(to: CGPoint(x: x + 5, y: horizon))
+            picket.addLine(to: CGPoint(x: x - 5, y: horizon))
+            picket.addLine(to: CGPoint(x: x - 5, y: top + 5))
+            picket.closeSubpath()
+            ctx.fill(picket, with: .color(.white))
+            ctx.stroke(picket, with: .color(.black.opacity(0.06)), lineWidth: 1)
+        }
+    }
+
+    private static func museum(_ ctx: inout GraphicsContext, _ size: CGSize, _ room: Int) {
+        let w = size.width, h = size.height, horizon = h * 0.55
+        ctx.clip(to: Path(CGRect(origin: .zero, size: size)))
+        ctx.fill(Path(CGRect(x: 0, y: 0, width: w, height: horizon)), with: rgb(0.95, 0.92, 0.86))
+        // Soft gallery spotlights.
+        for i in 0..<2 {
+            let cx = w * (i == 0 ? 0.33 : 0.67)
+            ctx.fill(Path(ellipseIn: CGRect(x: cx - w * 0.2, y: -h * 0.05, width: w * 0.4, height: horizon * 0.95)),
+                     with: .radialGradient(Gradient(colors: [.white.opacity(0.7), .white.opacity(0)]),
+                                           center: CGPoint(x: cx, y: h * 0.12), startRadius: 0, endRadius: w * 0.22))
+        }
+        ctx.fill(Path(CGRect(x: 0, y: 0, width: w, height: 10)), with: rgb(0.86, 0.8, 0.7))
+        ctx.fill(Path(CGRect(x: 0, y: 10, width: w, height: 3)), with: rgb(0.8, 0.72, 0.6))
+        ctx.fill(Path(CGRect(x: 0, y: horizon - h * 0.07, width: w, height: h * 0.07)), with: rgb(0.9, 0.86, 0.78))
+        ctx.fill(Path(CGRect(x: 0, y: horizon - h * 0.07, width: w, height: 2)), with: rgb(0.8, 0.72, 0.6))
+        // Columns at both edges, so rooms line up like one long hall.
+        let cw = w * 0.07
+        for cx in [w * 0.045, w * 0.955] {
+            ctx.fill(Path(CGRect(x: cx - cw / 2, y: 16, width: cw, height: horizon - 22)), with: rgb(0.99, 0.97, 0.93))
+            for k in [-0.25, 0.0, 0.25] {
+                ctx.fill(Path(CGRect(x: cx + cw * k - 0.75, y: 30, width: 1.5, height: horizon - 50)), with: rgb(0.85, 0.8, 0.72))
+            }
+            ctx.fill(Path(roundedRect: CGRect(x: cx - cw * 0.8, y: 13, width: cw * 1.6, height: 12), cornerRadius: 3), with: rgb(0.93, 0.89, 0.82))
+            ctx.fill(Path(roundedRect: CGRect(x: cx - cw * 0.75, y: horizon - 12, width: cw * 1.5, height: 12), cornerRadius: 2), with: rgb(0.93, 0.89, 0.82))
+        }
+        // Marble checkerboard floor.
+        let tile = w / 12
+        var row = 0
+        for y in stride(from: horizon, to: h, by: tile) {
+            for (col, x) in stride(from: CGFloat(0), to: w, by: tile).enumerated() {
+                let light = (row + col + room) % 2 == 0
+                ctx.fill(Path(CGRect(x: x, y: y, width: tile + 0.5, height: tile + 0.5)),
+                         with: light ? rgb(0.97, 0.96, 0.94) : rgb(0.84, 0.82, 0.8))
+            }
+            row += 1
+        }
+        ctx.fill(Path(CGRect(x: 0, y: horizon, width: w, height: 4)), with: .color(.black.opacity(0.06)))
+    }
+
+    private static func mansion(_ ctx: inout GraphicsContext, _ size: CGSize, _ room: Int) {
+        let w = size.width, h = size.height, horizon = h * 0.55
+        ctx.clip(to: Path(CGRect(origin: .zero, size: size)))
+        let gold = rgb(0.88, 0.7, 0.32)
+        ctx.fill(Path(CGRect(x: 0, y: 0, width: w, height: horizon)), with: rgb(0.62, 0.22, 0.32))
+        // Damask diamonds.
+        var r = 0
+        for y in stride(from: CGFloat(22), to: horizon - h * 0.12, by: 30) {
+            for x in stride(from: CGFloat(r % 2 == 0 ? 15 : 30), to: w, by: 30) {
+                var d = Path()
+                d.move(to: CGPoint(x: x, y: y - 6)); d.addLine(to: CGPoint(x: x + 5, y: y))
+                d.addLine(to: CGPoint(x: x, y: y + 6)); d.addLine(to: CGPoint(x: x - 5, y: y)); d.closeSubpath()
+                ctx.fill(d, with: rgb(1, 0.85, 0.6, 0.16))
+            }
+            r += 1
+        }
+        ctx.fill(Path(CGRect(x: 0, y: 0, width: w, height: 8)), with: gold)
+        // Cream wainscoting with gold panels.
+        let wy = horizon - h * 0.12
+        ctx.fill(Path(CGRect(x: 0, y: wy, width: w, height: horizon - wy)), with: rgb(0.97, 0.92, 0.85))
+        ctx.fill(Path(CGRect(x: 0, y: wy, width: w, height: 3)), with: gold)
+        let panels = 4
+        for i in 0..<panels {
+            let pw = w / CGFloat(panels)
+            ctx.stroke(Path(roundedRect: CGRect(x: CGFloat(i) * pw + 8, y: wy + 8, width: pw - 16, height: horizon - wy - 14), cornerRadius: 3),
+                       with: rgb(0.85, 0.72, 0.5), lineWidth: 1.5)
+        }
+        // Chandelier.
+        let cx = w * (room % 2 == 0 ? 0.5 : 0.35)
+        ctx.fill(Path(CGRect(x: cx - 1, y: 8, width: 2, height: h * 0.05)), with: gold)
+        var arm = Path()
+        arm.move(to: CGPoint(x: cx - w * 0.09, y: h * 0.07))
+        arm.addQuadCurve(to: CGPoint(x: cx + w * 0.09, y: h * 0.07), control: CGPoint(x: cx, y: h * 0.14))
+        ctx.stroke(arm, with: gold, lineWidth: 3)
+        for k in [-1.0, -0.5, 0.0, 0.5, 1.0] {
+            let fx = cx + w * 0.09 * k, fy = h * 0.07 + (k == 0 ? h * 0.035 : (abs(k) < 1 ? h * 0.02 : 0))
+            ctx.fill(Path(ellipseIn: CGRect(x: fx - 7, y: fy - 13, width: 14, height: 14)),
+                     with: .radialGradient(Gradient(colors: [Color(red: 1, green: 0.93, blue: 0.6), .clear]),
+                                           center: CGPoint(x: fx, y: fy - 6), startRadius: 0, endRadius: 8))
+            ctx.fill(Path(roundedRect: CGRect(x: fx - 2, y: fy - 6, width: 4, height: 7), cornerRadius: 1), with: .color(.white))
+        }
+        // Parquet floor with a red runner carpet.
+        ctx.fill(Path(CGRect(x: 0, y: horizon, width: w, height: h - horizon)), with: rgb(0.7, 0.5, 0.34))
+        var row = 0
+        for y in stride(from: horizon, to: h, by: 12) {
+            ctx.fill(Path(CGRect(x: 0, y: y, width: w, height: 1)), with: rgb(0.55, 0.38, 0.25, 0.5))
+            for x in stride(from: CGFloat(row % 2 == 0 ? 0 : 24), to: w, by: 48) {
+                ctx.fill(Path(CGRect(x: x, y: y, width: 1, height: 12)), with: rgb(0.55, 0.38, 0.25, 0.5))
+            }
+            row += 1
+        }
+        let rug = CGRect(x: w * 0.12, y: horizon + h * 0.06, width: w * 0.76, height: h - horizon - h * 0.06)
+        ctx.fill(Path(rug), with: rgb(0.74, 0.2, 0.28))
+        ctx.stroke(Path(rug.insetBy(dx: 5, dy: 5)), with: gold, lineWidth: 2)
+        ctx.fill(Path(CGRect(x: 0, y: horizon, width: w, height: 4)), with: .color(.black.opacity(0.12)))
     }
 }
 
