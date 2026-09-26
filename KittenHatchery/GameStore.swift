@@ -754,6 +754,25 @@ final class GameStore {
         save()
     }
 
+    /// Owns every place with a few pieces in each, for screenshots. Use after -demo.
+    func devShowcasePlaces() {
+        var l = data.lounge
+        l.ownedPlaces = Location.allCases
+        l.stored.removeAll { [.bookshelf, .plant, .rug].contains($0) }
+        // The breed shelf and throne move out of the lounge to suit the museum and mansion.
+        l.items.removeAll { [.breedShelf, .throne].contains($0.kind) }
+        l.items += [PlacedItem(kind: .breedShelf, x: 0.5, y: 0.3, place: .museum),
+                    PlacedItem(kind: .bookshelf, x: 0.2, y: 0.8, place: .museum),
+                    PlacedItem(kind: .fishTank, x: 0.8, y: 0.84, place: .museum),
+                    PlacedItem(kind: .plant, x: 0.52, y: 0.92, place: .museum),
+                    PlacedItem(kind: .throne, x: 0.5, y: 0.8, place: .mansion),
+                    PlacedItem(kind: .rug, x: 0.5, y: 0.93, tint: .honey, place: .mansion),
+                    PlacedItem(kind: .catBed, x: 0.2, y: 0.9, place: .mansion),
+                    PlacedItem(kind: .scratchPost, x: 0.85, y: 0.82, place: .mansion)]
+        data.lounge = l
+        save()
+    }
+
     func devResetSave() {
         data = SaveData()
         pendingHatch = nil

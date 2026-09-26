@@ -58,6 +58,7 @@ extension RootView {
     func applyDebugArguments() {
         let args = ProcessInfo.processInfo.arguments
         if args.contains("-demo") { store.seedDemo() }
+        if args.contains("-showcasePlaces") { store.devShowcasePlaces() }
         if let i = args.firstIndex(of: "-tab"), i + 1 < args.count {
             store.tab = ["eggs": .eggs, "cats": .cats, "lounge": .lounge, "battle": .play, "play": .play][args[i + 1]] ?? .den
             if args[i + 1] == "battle" { store.showArena = true }
