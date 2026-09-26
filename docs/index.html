@@ -142,13 +142,6 @@
   .shots::-webkit-scrollbar { display: none; }
   .shots img { flex: none; width: 240px; border-radius: 28px; scroll-snap-align: center; box-shadow: 0 20px 40px -24px rgba(60, 20, 30, .45); }
 
-  /* Safety */
-  .cards3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 32px; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 24px; }
-  .card .ic { font-size: 26px; }
-  .card h3 { margin: 10px 0 6px; font-size: 18px; font-weight: 900; }
-  .card p { margin: 0; color: var(--muted); }
-
   /* Final CTA */
   .final { background: var(--rose); color: #fff; border-radius: 40px; padding: 64px 32px; text-align: center; position: relative; overflow: hidden; }
   .final h2 { color: #fff; }
@@ -178,7 +171,6 @@
     .breeds { grid-template-columns: repeat(3, 1fr); }
     .feature { grid-template-columns: 1fr; gap: 32px; }
     .feature.flip .copy { order: 0; }
-    .cards3 { grid-template-columns: 1fr; }
     .strip { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 600px) {
@@ -205,7 +197,6 @@
     <div class="nav-links">
       <a href="#breeds">Breeds</a>
       <a href="#features">Features</a>
-      <a href="#safety">Safety</a>
       <a class="btn small js-download" href="#download">Get the app</a>
     </div>
   </div>
@@ -373,20 +364,6 @@
   </div>
 </section>
 
-<section id="safety" style="padding-top: 24px;">
-  <div class="wrap center">
-    <div class="reveal">
-      <div class="kicker">Cozy by design</div>
-      <h2>Friendly, safe and ad-free</h2>
-      <p class="sub">Club Kitten is a gentle game you can relax with.</p>
-    </div>
-    <div class="cards3 reveal" style="text-align:left;">
-      <div class="card"><div class="ic">🚫</div><h3>No ads, no tracking</h3><p>No ads and no analytics. Your game data is used only to run the game.</p></div>
-      <div class="card"><div class="ic">💬</div><h3>No free-text chat</h3><p>Friends talk with cute stickers and set phrases, so there's nothing nasty to read.</p></div>
-      <div class="card"><div class="ic">🛡️</div><h3>You're in control</h3><p>Block or report any player, and delete your account and data from Settings at any time.</p></div>
-    </div>
-  </div>
-</section>
 
 <section id="download" style="padding-top: 24px;">
   <div class="wrap">
