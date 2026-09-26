@@ -28,7 +28,7 @@ No payment processors, analytics, advertising or AI services are used at runtime
 The app works the same in all regions. There are no region-specific features or content.
 
 **6. Regulated industry or third-party material**
-Not applicable. The app is not in a regulated industry. All artwork was created for this app by the developer with the Higgsfield image generation tool; no third-party characters, brands or licensed material are used.
+Not applicable. The app is not in a regulated industry. All artwork was created for this app by the developer with the Higgsfield image generation tool, whose terms of use permit commercial use of generated content. No third-party characters, brands or licensed material are used.
 
 Thank you,
 Elias Nemr
