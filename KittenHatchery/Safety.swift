@@ -26,8 +26,9 @@ struct PlayerSafetyMenu: View {
             }
             .accessibilityLabel("More options for \(name)")
             .sheet(isPresented: $reporting) {
+                // Full height: at .medium the Send button starts off screen on every phone.
                 ReportSheet(playerID: playerID, name: name, context: context, onBlocked: onBlocked)
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents([.large])
             }
             .confirmationDialog("Block \(name)?", isPresented: $confirmBlock, titleVisibility: .visible) {
                 Button("Block", role: .destructive) { block() }

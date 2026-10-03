@@ -34,27 +34,13 @@ struct HatchRevealView: View {
             }
             .padding(.top, 16)
 
-            ZStack {
-                RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Theme.beige)
-                if phase == .egg {
-                    EggView(rarity: rarity, size: 200, crack: CGFloat(taps) / CGFloat(tapsNeeded))
-                        .rotationEffect(.degrees(shake ? 9 : -9), anchor: .bottom)
-                        .transition(.opacity)
-                } else {
-                    CatSprite(cat: cat, size: 260, mood: .happy)
-                        .transition(.scale(scale: 0.2).combined(with: .opacity))
-                    EggHalf(rarity: rarity, top: true, size: 200)
-                        .rotationEffect(.degrees(fly ? -50 : 0))
-                        .offset(x: fly ? -130 : 0, y: fly ? -200 : 0)
-                        .opacity(fly ? 0 : 1)
-                    EggHalf(rarity: rarity, top: false, size: 200)
-                        .rotationEffect(.degrees(fly ? 30 : 0))
-                        .offset(x: fly ? 140 : 0, y: fly ? 160 : 0)
-                        .opacity(fly ? 0 : 1)
-                    ConfettiView()
-                }
+            // Gives up height first, so the name card and button stay on screen on short screens
+            // (iPhone SE, iPhone apps on iPad). While typing a name it may fold away entirely.
+            GeometryReader { geo in
+                if geo.size.height >= 80 { stage(scale: min(1, geo.size.height / 360)) }
             }
-            .frame(height: 360)
+            .frame(minHeight: nameFocused ? 0 : 150, maxHeight: 360)
+            .layoutPriority(-1)
             .contentShape(Rectangle())
             .onTapGesture { crack() }
             .accessibilityAddTraits(.isButton)
@@ -144,6 +130,30 @@ struct HatchRevealView: View {
             }
         }
         #endif
+    }
+
+    /// The egg, then the cat bursting out. `scale` is 1 at the full 360-point stage.
+    private func stage(scale: CGFloat) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Theme.beige)
+            if phase == .egg {
+                EggView(rarity: rarity, size: 200 * scale, crack: CGFloat(taps) / CGFloat(tapsNeeded))
+                    .rotationEffect(.degrees(shake ? 9 : -9), anchor: .bottom)
+                    .transition(.opacity)
+            } else {
+                CatSprite(cat: cat, size: 260 * scale, mood: .happy)
+                    .transition(.scale(scale: 0.2).combined(with: .opacity))
+                EggHalf(rarity: rarity, top: true, size: 200 * scale)
+                    .rotationEffect(.degrees(fly ? -50 : 0))
+                    .offset(x: fly ? -130 : 0, y: fly ? -200 : 0)
+                    .opacity(fly ? 0 : 1)
+                EggHalf(rarity: rarity, top: false, size: 200 * scale)
+                    .rotationEffect(.degrees(fly ? 30 : 0))
+                    .offset(x: fly ? 140 : 0, y: fly ? 160 : 0)
+                    .opacity(fly ? 0 : 1)
+                ConfettiView()
+            }
+        }
     }
 
     private func crack() {

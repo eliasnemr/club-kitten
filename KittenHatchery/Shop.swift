@@ -320,7 +320,8 @@ struct DecorateView: View {
     enum Section: String, CaseIterable, Identifiable {
         case storage, walls, floors, wallpaper, name
         var id: String { rawValue }
-        var title: String { rawValue.capitalized }
+        /// Short enough for five segments on a 375-point-wide screen.
+        var title: String { self == .wallpaper ? "Paper" : rawValue.capitalized }
     }
 
     /// Walls, floors and wallpaper only apply in the lounge; other places have their own look.
@@ -337,6 +338,8 @@ struct DecorateView: View {
     /// A wall, floor or wallpaper you don't own yet, shown in the room until you buy or cancel.
     @State private var tryOn: StyleTryOn?
     @State private var build: BuildOption?
+    /// Shrinks on short screens (iPhone SE, iPhone apps on iPad) so the storage tray keeps room.
+    @State private var roomHeight: CGFloat = 290
 
     enum StyleTryOn: Equatable {
         case wall(WallStyle), floor(FloorStyle), pattern(WallPattern)
@@ -394,7 +397,7 @@ struct DecorateView: View {
                         preview: { build = .place($0) })
             RoomStage(room: $room, count: rooms, place: place,
                       onExtend: store.nextRoomPrice(place) == nil ? nil : { build = .room(place) }) { r in
-                RoomView(lounge: shown, residents: [], height: 290,
+                RoomView(lounge: shown, residents: [], height: roomHeight,
                          shelfBreeds: Breed.allCases.reversed().filter { store.discovered.contains($0) },
                          portrait: store.activeCat?.kind,
                          editing: true, selectedItem: selected,
@@ -462,6 +465,7 @@ struct DecorateView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { roomHeight = min(290, max(200, $0 - 420)) }
         .foregroundStyle(Theme.text)
         .background(Theme.cream.ignoresSafeArea())
         .onAppear {
