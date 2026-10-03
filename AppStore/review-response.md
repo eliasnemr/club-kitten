@@ -1,52 +1,21 @@
-# Reply to App Review: Club Kitten 1.2 (build 4)
+# Reply to App Review: Club Kitten 1.3 (build 6)
 
-Paste the text below into the reply in App Store Connect → App Review, and attach the screen recording.
+Rejection: Guideline 4 - Design, submission 2c3fde76-8801-4040-bfe6-4d9cf38a7e74, reviewed 1.2 (4) on iPad Air 11-inch (M3).
+Paste the text below into the reply in App Store Connect → App Review. The reply for 1.2 (build 4) is in git history.
 
 ---
 
-Hello, and thank you for reviewing Club Kitten. Here is the information you asked for. Build 4 adds in-app account deletion (Den → Settings → Delete account and data).
+Hello, and thank you for the review.
 
-**1. Screen recording**
-Attached, recorded on an iPhone running the latest iOS. It starts at app launch and shows: hatching the first kitten, the Den, a minigame, the furniture shop and decorating the lounge, adding a friend with a friend code, visiting their lounge and sending a preset chat phrase, reporting and blocking that player from the ⋯ menu, the Blocked players list with Unblock, and deleting the account from Settings.
+Club Kitten is an iPhone app, so on iPad it runs in iPhone compatibility mode, in a 375 × 667 point window. A few screens were laid out for taller iPhones and did not fit that window. Build 6 fixes them:
 
-**2. Purpose and audience**
-Club Kitten is a cozy, casual cat-raising game for all ages. Players hatch kittens from eggs, raise them over time, play short minigames, and decorate a lounge that friends can visit. It offers a relaxing, low-pressure game with gentle social features and no ads, no purchases and no free-text chat.
+- **Hatching a kitten:** the title and the Welcome home / Send to the Kitty Hotel button were pushed off screen. The egg and kitten now scale to fit, and the name field, title and button stay visible while the keyboard is open.
+- **Decorating the lounge:** the storage tray was squeezed and a tab label was cut off. The room preview now shortens on smaller screens and all five tabs fit.
+- **Reporting a player:** the report sheet now opens at full height, so the Send report button is always visible.
 
-**3. How to access the main features**
-- No login or credentials are needed. Each install gets an anonymous account automatically.
-- Tap the egg on first launch to hatch a kitten. Minigames and battles are in the Play tab; the shop and decorating are in the Lounge tab.
-- Multiplayer is between friends only. Game Center friends who play are added automatically, or two players can add each other with the friend code in Lounge → Friends. To test on two devices: copy the friend code on device A, enter it on device B and tap Add.
-- Report and block: the ⋯ menu next to any player in Friends, in their lounge, in the guestbook and on playdate invites. Blocked players are listed under Friends → Blocked players.
-- Account deletion: Den → gear (Settings) → Delete account and data. It deletes the account and all its data from our server immediately and resets the game on the device.
+We tested every screen on iPad Air 11-inch (M3) in compatibility mode, and on iPhone. Build 6 is version 1.3, which also adds new places to the Cat Lounge (park, museum and mansion) and extra rooms.
 
-**4. External services**
-- Supabase (supabase.com): database, anonymous authentication and realtime updates for cloud save and multiplayer. Hosted in the EU (Frankfurt).
-- Apple Game Center: player identity and friends.
-No payment processors, analytics, advertising or AI services are used at runtime.
-
-**5. Regional differences**
-The app works the same in all regions. There are no region-specific features or content.
-
-**6. Regulated industry or third-party material**
-Not applicable. The app is not in a regulated industry. All artwork was created for this app by the developer with the Higgsfield image generation tool, whose terms of use permit commercial use of generated content. No third-party characters, brands or licensed material are used.
+No login is needed. Each install gets an anonymous account automatically. Everything else from our previous reply still applies.
 
 Thank you,
 Elias Nemr
-
----
-
-## Recording shot list (on your iPhone, with TestFlight build 4)
-
-Use Control Center → Screen Recording. Start with the app closed.
-
-1. Launch Club Kitten from the home screen.
-2. Tap the egg until it hatches, name the kitten, tap Welcome home.
-3. Show the Den (age, stats). Open Play and play a few seconds of a minigame.
-4. Lounge → Shop → open an item → In my lounge preview → buy it → Place it now.
-5. Lounge → Friends: show your friend code and add a friend's code (a second phone or a friend).
-6. Visit the friend's lounge, tap a chat phrase.
-7. Tap ⋯ → Report → pick a reason → Send (with "Also block" on).
-8. Friends → Blocked players → show the player → Unblock.
-9. Den → gear → Settings → Delete account and data → confirm → show "Your account and data were deleted".
-
-Keep it under 3 minutes if you can.
