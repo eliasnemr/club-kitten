@@ -1,8 +1,8 @@
 import SwiftUI
 
 enum AppLinks {
-    /// The landing page. Swap for the App Store link once Club Kitten is live.
-    static let invite = URL(string: "https://eliasnemr.github.io/club-kitten/")!
+    /// The App Store page.
+    static let invite = URL(string: "https://apps.apple.com/app/club-kitten/id6816022537")!
 
     /// Your personal invite: the web page opens Club Kitten (or the App Store) and adds you as a friend.
     static func invite(code: String?) -> URL {

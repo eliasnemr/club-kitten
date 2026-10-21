@@ -294,19 +294,25 @@ struct TintPicker: View {
     let pick: (ItemTint) -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        // Swatches share the width they're given, so the row never pushes the screen wider
+        // (small phones, Display Zoom, larger text).
+        HStack(spacing: 4) {
             ForEach(ItemTint.allCases) { t in
                 Button {
                     Haptics.tap()
                     pick(t)
                 } label: {
-                    Circle().fill(t.color).frame(width: 36, height: 36)
+                    Circle().fill(t.color)
                         .overlay(Circle().stroke(selected == t ? Theme.text : Theme.border, lineWidth: selected == t ? 3 : 1))
-                        .frame(width: 44, height: 44)
+                        .frame(maxWidth: 36, maxHeight: 36)
+                        .aspectRatio(1, contentMode: .fit)
+                        .frame(minWidth: 0, maxWidth: 48, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel(t.title)
             }
         }
+        .frame(maxWidth: 300, alignment: .leading)
     }
 }
 
@@ -440,8 +446,6 @@ struct DecorateView: View {
                     }
                     if item.kind.tintable {
                         TintPicker(selected: item.tint ?? .rose) { store.setTint(item.id, $0) }
-                            .scaleEffect(0.85, anchor: .leading)
-                            .frame(height: 38, alignment: .leading)
                     }
                 }
             } else {
@@ -473,6 +477,7 @@ struct DecorateView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+        .debugNarrow()
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { roomHeight = min(290, max(200, $0 - 420)) }
         .foregroundStyle(Theme.text)
         .background(Theme.cream.ignoresSafeArea())
@@ -536,6 +541,7 @@ struct DecorateView: View {
                                     .frame(height: 60)
                                 Text(kind.title).font(Theme.font(12, .bold)).lineLimit(1).minimumScaleFactor(0.8)
                                 Tag(text: "Place · \(counts[kind] ?? 0)", color: Theme.success)
+                                    .lineLimit(1).minimumScaleFactor(0.7)
                             }
                             .padding(8)
                             .frame(maxWidth: .infinity, minHeight: 120)

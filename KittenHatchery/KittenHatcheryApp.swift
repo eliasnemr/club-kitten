@@ -10,6 +10,7 @@ struct KittenHatcheryApp: App {
             RootView()
                 .environment(store)
                 .preferredColorScheme(.light)
+                .debugNarrow()
         }
     }
 }
@@ -118,6 +119,17 @@ extension RootView {
     }
 }
 #endif
+
+extension View {
+    /// Debug -narrow: lay out 320 points wide, like an iPhone with Display Zoom turned on.
+    func debugNarrow() -> some View {
+        #if DEBUG
+        frame(maxWidth: ProcessInfo.processInfo.arguments.contains("-narrow") ? 320 : .infinity)
+        #else
+        self
+        #endif
+    }
+}
 
 /// Shared screen scaffold: cream background, padded scroll content.
 struct Screen<Content: View>: View {

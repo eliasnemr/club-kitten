@@ -1,8 +1,9 @@
 import SwiftUI
 import AVFoundation
 
-/// What a cat is doing right now, for livelier rooms.
-enum CatAction: Equatable { case idle, walk, stretch, nap }
+/// What a cat is doing right now, for livelier rooms. `settle` is the moment after walking,
+/// when cats with sprite frames turn to face you and sit down.
+enum CatAction: Equatable { case idle, walk, settle, stretch, nap }
 
 /// A cat drawn from its breed's Higgsfield art and sized by growth stage.
 struct CatSprite: View {
@@ -20,11 +21,64 @@ struct CatSprite: View {
     @State private var breathe = false
     @State private var hop = false
     @State private var tilt: Double = 0
+    /// True while the sprite jump plays.
+    @State private var jumping = false
+
+    /// Side-view frames for this breed, if it has them (not for old element-tinted cats).
+    private var sheet: SpriteSheet? { cat.breed == nil || !lively ? nil : SpriteSheet.for(cat.kind) }
+    /// Frames are drawn at the same height as the front art, so poses line up.
+    private var spriteHeight: CGFloat { size * cat.stage.scale }
+
+    private enum Shown: Equatable { case front, walk, jump, sit }
+    private var shown: Shown {
+        guard let sheet else { return .front }
+        if jumping { return .jump }
+        if action == .walk { return .walk }
+        if action == .settle, sheet.sit != nil { return .sit }
+        return .front
+    }
 
     private var lively: Bool { animated && !reduceMotion }
     private var shownMood: Mood { action == .nap ? .sleepy : mood }
 
     var body: some View {
+        // Crossfades between clips; the turn-and-sit ends on the front pose, so stopping
+        // settles into sitting instead of snapping.
+        ZStack {
+            switch (shown, sheet) {
+            case (.jump, let sheet?):
+                clip("jump", sheet.jump, loop: false).id("jump-\(jump)")
+            case (.walk, let sheet?):
+                clip("walk", sheet.walk, loop: true)
+            case (.sit, let sheet?):
+                if let sit = sheet.sit { clip("sit", sit, loop: false) }
+            default:
+                frontView
+                    .transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .bottom)),
+                                            removal: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.28), value: shown)
+        .onChange(of: jump) { _, _ in
+            guard let sheet else { return }
+            jumping = true
+            let mine = jump
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(Double(sheet.jump.frames) / SpriteSheet.fps))
+                if jump == mine { jumping = false }
+            }
+        }
+    }
+
+    private func clip(_ name: String, _ info: SpriteSheet.Clip, loop: Bool) -> some View {
+        SpriteClipView(breed: cat.kind, clip: name, info: info, height: spriteHeight, loop: loop)
+            .frame(width: size, height: size, alignment: .bottom)
+            .transition(.opacity)
+    }
+
+    /// The front-facing art with code animation (idle, stretch, nap, and walking/jumping
+    /// for breeds without sprite frames).
+    private var frontView: some View {
         sprite
             // Walking: a little bounce and waddle on every step.
             .offset(y: hop ? -size * 0.05 : 0)
@@ -39,7 +93,7 @@ struct CatSprite: View {
             } keyframes: { _ in
                 KeyframeTrack(\.y) {
                     CubicKeyframe(0, duration: 0.08)
-                    SpringKeyframe(reduceMotion ? 0 : -0.32, duration: 0.24, spring: .snappy)
+                    SpringKeyframe(reduceMotion || sheet != nil ? 0 : -0.32, duration: 0.24, spring: .snappy)
                     CubicKeyframe(0, duration: 0.2)
                     CubicKeyframe(0, duration: 0.18)
                 }

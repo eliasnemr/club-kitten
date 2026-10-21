@@ -303,7 +303,15 @@ struct RoomView: View {
     private var shownItems: [PlacedItem] { lounge.items(in: shownPlace, room: room) }
 
     private var everyone: [(cat: Cat, label: String?, isYou: Bool)] {
-        residents.prefix(5).map { ($0, $0.name, false) } + guests.map { ($0.cat, $0.label, $0.isYou) }
+        var list = residents.prefix(5).map { ($0, $0.name, false) } + guests.map { ($0.cat, $0.label, $0.isYou) }
+        #if DEBUG
+        // -soloCat cream: only that breed in the room, to watch its animations.
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-soloCat"), i + 1 < args.count {
+            list = list.filter { $0.0.kind.rawValue == args[i + 1] }
+        }
+        #endif
+        return list
     }
 
     var body: some View {
@@ -480,7 +488,16 @@ struct RoomView: View {
             }
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(2.4))
-                if walking[mover] == token { walking[mover] = nil }
+                guard walking[mover] == token else { return }
+                // Cats with sprite frames turn to face you and sit down when they stop
+                // (set together with the end of the walk, so there's no frame in between).
+                let sit = everyone.first(where: { $0.cat.id == mover }).flatMap { SpriteSheet.for($0.cat.kind)?.sit }
+                if sit != nil { resting[mover] = .settle }
+                walking[mover] = nil
+                if let sit {
+                    try? await Task.sleep(for: .seconds(Double(sit.frames) / SpriteSheet.fps))
+                    if resting[mover] == .settle { resting[mover] = nil }
+                }
             }
         }
     }
