@@ -281,6 +281,9 @@ struct RoomView: View {
     /// Pinching the room while an item is selected resizes it (editing only).
     var onResizeItem: (UUID, Double) -> Void = { _, _ in }
     var onPetCat: (Cat) -> Void = { _ in }
+    /// A cat that only moves when the player taps the floor (your own cat in your lounge).
+    /// Other cats in the room still wander by themselves.
+    var controlled: UUID? = nil
     /// Which place and room to show. Defaults to where the owner is, first room.
     var place: Location? = nil
     var room = 0
@@ -350,6 +353,18 @@ struct RoomView: View {
 
                 ForEach(lounge.items(in: at, room: room)) { item in
                     itemView(item, w: w, h: h, scale: scale)
+                }
+                if let controlled, !editing {
+                    // Tap anywhere to walk your cat there. Taps on the wall go to the floor just below.
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture(coordinateSpace: .local) { loc in
+                            guard w > 0, h > 0 else { return }
+                            walkTo(controlled, CGPoint(x: loc.x / w, y: loc.y / h))
+                        }
+                        .zIndex(500)
+                        .accessibilityLabel("Floor")
+                        .accessibilityHint("Tap to walk your cat here")
                 }
                 ForEach(everyone, id: \.cat.id) { entry in
                     catView(entry.cat, label: entry.label, isYou: entry.isYou, w: w, h: h, scale: scale)
@@ -438,6 +453,7 @@ struct RoomView: View {
     }
 
     private func home(for id: UUID) -> CGPoint {
+        if id == controlled { return CGPoint(x: 0.5, y: 0.86) }
         let ids = everyone.map(\.cat.id)
         let i = ids.firstIndex(of: id) ?? 0
         let n = max(1, ids.count)
@@ -456,7 +472,8 @@ struct RoomView: View {
         guard !editing else { return }
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(Double.random(in: 1.5...3)))
-            guard let mover = everyone.randomElement()?.cat.id, resting[mover] != .nap else { continue }
+            guard let mover = everyone.map(\.cat.id).filter({ $0 != controlled }).randomElement(),
+                  resting[mover] != .nap else { continue }
             let roll = Double.random(in: 0..<1)
 
             // Sometimes just stretch, or curl up for a nap.
@@ -474,30 +491,50 @@ struct RoomView: View {
             var target = CGPoint(x: Double.random(in: 0.14...0.86), y: Double.random(in: 0.74...0.95))
             var seat: UUID?
             // Sometimes hop onto a free sofa, bed, cushion or cat tree.
-            if roll < 0.4, let free = shownItems.filter({ $0.kind.seatHeight != nil && !seated.values.contains($0.id) }).randomElement() {
+            // Only low seats: perching on top of the cat tree or castle looked like standing on the wall.
+            if roll < 0.4, let free = shownItems.filter({ ($0.kind.seatHeight ?? 1) < 0.6 && !seated.values.contains($0.id) }).randomElement() {
                 seat = free.id
                 target = CGPoint(x: free.x, y: free.y)
             }
-            if target.x < from.x { facingLeft.insert(mover) } else { facingLeft.remove(mover) }
-            let token = UUID()
-            walking[mover] = token
-            resting[mover] = nil
-            withAnimation(.easeInOut(duration: 2.4)) {
-                seated[mover] = seat
-                spots[mover] = target
-            }
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(2.4))
-                guard walking[mover] == token else { return }
-                // Cats with sprite frames turn to face you and sit down when they stop
-                // (set together with the end of the walk, so there's no frame in between).
-                let sit = everyone.first(where: { $0.cat.id == mover }).flatMap { SpriteSheet.for($0.cat.kind)?.sit }
-                if sit != nil { resting[mover] = .settle }
-                walking[mover] = nil
-                if let sit {
-                    try? await Task.sleep(for: .seconds(Double(sit.frames) / SpriteSheet.fps))
-                    if resting[mover] == .settle { resting[mover] = nil }
-                }
+            startWalk(mover, from: from, to: target, seat: seat, duration: 2.4)
+        }
+    }
+
+    /// The part of the room cats can stand on (feet position, normalised): the floor only.
+    private static let floorX = 0.1...0.9
+    private static let floorY = 0.7...0.95
+
+    /// Walks a cat to where the player tapped, kept on the floor, at a steady pace.
+    private func walkTo(_ id: UUID, _ tap: CGPoint) {
+        let target = CGPoint(x: min(max(tap.x, Self.floorX.lowerBound), Self.floorX.upperBound),
+                             y: min(max(tap.y, Self.floorY.lowerBound), Self.floorY.upperBound))
+        let from = spots[id] ?? home(for: id)
+        let distance = hypot(target.x - from.x, (target.y - from.y) * 0.6)
+        guard distance > 0.02 else { return }
+        Haptics.tap(.soft)
+        startWalk(id, from: from, to: target, seat: nil, duration: min(3.2, max(0.7, distance * 3.4)))
+    }
+
+    private func startWalk(_ mover: UUID, from: CGPoint, to target: CGPoint, seat: UUID?, duration: Double) {
+        if target.x < from.x { facingLeft.insert(mover) } else { facingLeft.remove(mover) }
+        let token = UUID()
+        walking[mover] = token
+        resting[mover] = nil
+        withAnimation(.easeInOut(duration: duration)) {
+            seated[mover] = seat
+            spots[mover] = target
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(duration))
+            guard walking[mover] == token else { return }
+            // Cats with sprite frames turn to face you and sit down when they stop
+            // (set together with the end of the walk, so there's no frame in between).
+            let sit = everyone.first(where: { $0.cat.id == mover }).flatMap { SpriteSheet.for($0.cat.kind)?.sit }
+            if sit != nil { resting[mover] = .settle }
+            walking[mover] = nil
+            if let sit {
+                try? await Task.sleep(for: .seconds(Double(sit.frames) / SpriteSheet.fps))
+                if resting[mover] == .settle { resting[mover] = nil }
             }
         }
     }

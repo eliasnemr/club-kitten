@@ -31,10 +31,11 @@ struct LoungeView: View {
                                 preview: { build = .place($0) })
                     RoomStage(room: $room, count: store.lounge.rooms(in: place), place: place,
                               onExtend: store.nextRoomPrice(place) == nil ? nil : { build = .room(place) }) { r in
-                        RoomView(lounge: store.lounge, residents: store.cats, guests: guests, height: 400,
+                        // Just your selected cat, which walks where you tap; visiting friends roam freely.
+                        RoomView(lounge: store.lounge, residents: store.activeCat.map { [$0] } ?? [], guests: guests, height: 400,
                                  bubbles: bubbles, shelfBreeds: shelfBreeds, portrait: store.activeCat?.kind,
                                  onPetCat: { cat in if store.cats.contains(where: { $0.id == cat.id }) { store.record(.petCats) } },
-                                 room: r)
+                                 controlled: store.activeCat?.id, room: r)
                     }
                     .overlay { if celebrate > 0 { ConfettiView(count: 50).id(celebrate) } }
                     if let online = store.online, online.isLive {
@@ -50,8 +51,8 @@ struct LoungeView: View {
                                    badge: store.online?.requests.filter(\.incoming).count ?? 0) { showFriends = true }
                     }
                     Text(store.nextRoomPrice(place) != nil && store.lounge.rooms(in: place) == 1
-                         ? "Your cats wander here. Tap one to pet it. Need more space? Tap + to build another \(place.roomWord)."
-                         : "Your cats wander here. Tap one to pet it. Friends who drop by can pet them and leave gifts.")
+                         ? "Tap the floor to walk \(store.activeCat?.name ?? "your cat") there. Need more space? Tap + to build another \(place.roomWord)."
+                         : "Tap the floor to walk \(store.activeCat?.name ?? "your cat") there, or tap \(store.activeCat?.name ?? "it") to pet. Pick a different cat in Cats.")
                         .font(Theme.font(13)).foregroundStyle(Theme.muted)
                 }
             }
