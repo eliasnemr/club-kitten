@@ -299,6 +299,8 @@ struct RoomView: View {
     @State private var jumps: [UUID: Int] = [:]
     /// Stretching or napping cats.
     @State private var resting: [UUID: CatAction] = [:]
+    /// Ripples and paw prints where the player tapped to walk their cat.
+    @State private var tapMarks: [TapMark] = []
     /// Cats sitting on a piece of furniture (cat id → item id).
     @State private var seated: [UUID: UUID] = [:]
 
@@ -365,6 +367,16 @@ struct RoomView: View {
                         .zIndex(500)
                         .accessibilityLabel("Floor")
                         .accessibilityHint("Tap to walk your cat here")
+                }
+                ForEach(tapMarks) { mark in
+                    TapMarkView(mark: mark, scale: scale)
+                        .position(x: mark.target.x * w, y: mark.target.y * h)
+                        .zIndex(900)
+                    if mark.onWall {
+                        TapRipple(scale: scale)
+                            .position(x: mark.tap.x * w, y: mark.tap.y * h)
+                            .zIndex(900)
+                    }
                 }
                 ForEach(everyone, id: \.cat.id) { entry in
                     catView(entry.cat, label: entry.label, isYou: entry.isYou, w: w, h: h, scale: scale)
@@ -510,9 +522,28 @@ struct RoomView: View {
                              y: min(max(tap.y, Self.floorY.lowerBound), Self.floorY.upperBound))
         let from = spots[id] ?? home(for: id)
         let distance = hypot(target.x - from.x, (target.y - from.y) * 0.6)
-        guard distance > 0.02 else { return }
-        Haptics.tap(.soft)
-        startWalk(id, from: from, to: target, seat: nil, duration: min(3.2, max(0.7, distance * 3.4)))
+        let onWall = tap.y < Self.floorY.lowerBound - 0.04
+        if distance <= 0.02 {
+            // Tapped right where it already is: a little hop instead of a walk.
+            Haptics.tap(.light)
+            jumps[id, default: 0] += 1
+            mark(tap: tap, target: target, onWall: false, life: 0.8)
+            return
+        }
+        Haptics.tap(onWall ? .rigid : .soft)
+        let duration = min(3.2, max(0.7, distance * 3.4))
+        mark(tap: tap, target: target, onWall: onWall, life: duration + 0.4)
+        startWalk(id, from: from, to: target, seat: nil, duration: duration)
+    }
+
+    /// Shows where the tap landed and where the cat is going; only the newest stays.
+    private func mark(tap: CGPoint, target: CGPoint, onWall: Bool, life: Double) {
+        let m = TapMark(tap: tap, target: target, onWall: onWall)
+        withAnimation(.easeOut(duration: 0.15)) { tapMarks = [m] }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(life))
+            withAnimation(.easeOut(duration: 0.35)) { tapMarks.removeAll { $0.id == m.id } }
+        }
     }
 
     private func startWalk(_ mover: UUID, from: CGPoint, to target: CGPoint, seat: UUID?, duration: Double) {
@@ -777,5 +808,65 @@ struct BubbleView: View {
         .padding(.horizontal, 10).padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: 12).fill(.white).shadow(color: .black.opacity(0.12), radius: 6, y: 2))
         .transition(.scale.combined(with: .opacity))
+    }
+}
+
+
+// MARK: - Tap feedback
+
+struct TapMark: Identifiable, Equatable {
+    let id = UUID()
+    /// Where the finger landed and where the cat will stand (normalised room coordinates).
+    let tap: CGPoint
+    let target: CGPoint
+    let onWall: Bool
+}
+
+/// The destination: a soft ring on the floor with two little paw prints that pop in.
+struct TapMarkView: View {
+    let mark: TapMark
+    let scale: CGFloat
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            Ellipse()
+                .fill(Theme.rose.opacity(0.14))
+                .overlay(Ellipse().stroke(Theme.rose.opacity(0.55), lineWidth: 2))
+                .frame(width: 46 * scale, height: 16 * scale)
+                .scaleEffect(shown || reduceMotion ? 1 : 0.4)
+            HStack(spacing: 6 * scale) {
+                paw.rotationEffect(.degrees(-14)).offset(y: 2 * scale)
+                paw.rotationEffect(.degrees(12)).offset(y: -2 * scale)
+            }
+            .offset(y: -1 * scale)
+            .scaleEffect(shown || reduceMotion ? 1 : 0.2)
+        }
+        .allowsHitTesting(false)
+        .onAppear { withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) { shown = true } }
+        .accessibilityHidden(true)
+    }
+
+    private var paw: some View {
+        Image(systemName: "pawprint.fill")
+            .font(.system(size: 11 * scale, weight: .bold))
+            .foregroundStyle(Theme.rose.opacity(0.75))
+    }
+}
+
+/// A quick ring that spreads out from the finger (used when tapping the wall).
+struct TapRipple: View {
+    let scale: CGFloat
+    @State private var go = false
+
+    var body: some View {
+        Circle()
+            .stroke(Theme.rose.opacity(go ? 0 : 0.6), lineWidth: 2.5)
+            .frame(width: 44 * scale, height: 44 * scale)
+            .scaleEffect(go ? 1.4 : 0.3)
+            .allowsHitTesting(false)
+            .onAppear { withAnimation(.easeOut(duration: 0.55)) { go = true } }
+            .accessibilityHidden(true)
     }
 }
