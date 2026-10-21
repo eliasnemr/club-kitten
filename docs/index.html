@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Club Kitten</title>
-<meta name="description" content="Hatch, raise and play with cute cats. Collect 10 breeds, grow your lounge into a park, museum or mansion, and visit friends. $2.99 on iPhone, no ads.">
+<meta name="description" content="Hatch, raise and play with cute cats. $2.99 on iPhone, no ads.">
 <meta property="og:title" content="Club Kitten: hatch, raise and play with cute cats">
-<meta property="og:description" content="Crack mystery eggs, collect 10 breeds from Basic to Legendary, and build the coziest Cat Lounge on the block.">
+<meta property="og:description" content="Hatch mystery eggs, raise ten adorable breeds and build the coziest lounge on the block.">
 <meta property="og:image" content="https://eliasnemr.github.io/club-kitten/assets/shots/01-hatch.jpg">
 <meta name="theme-color" content="#F6F2EF">
 <link rel="icon" href="assets/icon.png">
@@ -138,11 +138,15 @@
     animation: stroll var(--dur) linear var(--delay) infinite; cursor: pointer; z-index: var(--z); }
   .walker .cat { width: 100%; height: 100%; background-size: var(--strip) 100%; background-repeat: no-repeat;
     animation: frames var(--fdur) steps(var(--n)) infinite; }
-  .walker.jumping .cat { animation: frames var(--jdur) steps(var(--jn)) 1 forwards; }
+  /* The jump is its own layer, created fresh for each tap so it always starts on frame one. */
+  .walker.jumping .cat { visibility: hidden; }
+  .walker .jump { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); background-repeat: no-repeat;
+    animation: jumpframes var(--jdur) steps(var(--jn)) 1 forwards; }
   .walker .name { position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%); white-space: nowrap;
     background: #fff; border-radius: 999px; padding: 1px 9px; font-size: 11px; font-weight: 800; color: var(--text); }
   @keyframes stroll { from { transform: translateX(-160px); } to { transform: translateX(calc(var(--track) + 40px)); } }
   @keyframes frames { from { background-position: 0 0; } to { background-position: calc(-1 * var(--strip)) 0; } }
+  @keyframes jumpframes { from { background-position: 0 0; } to { background-position: calc(-1 * var(--jstrip) + var(--jw)) 0; } }
   .parade-hint { margin-top: 14px; color: var(--muted); font-size: 14px; font-weight: 700; }
 
   /* Places */
@@ -226,10 +230,6 @@
   <div class="wrap">
     <a class="brand" href="#top"><img src="assets/icon.png" alt="">Club Kitten</a>
     <div class="nav-links">
-      <a href="#breeds">Breeds</a>
-      <a href="#parade">Cats</a>
-      <a href="#features">Features</a>
-      <a href="#places">Places</a>
       <a class="btn small js-download" href="#download">Get the app</a>
     </div>
   </div>
@@ -239,7 +239,7 @@
   <div class="wrap">
     <span class="eyebrow">🐾 <span class="js-price">$2.99</span> on iPhone</span>
     <h1>Hatch a kitten. <em>Raise a legend.</em></h1>
-    <p class="lede">Crack mystery eggs, collect 10 adorable breeds, play minigames and build the coziest Cat Lounge on the block. Then invite your friends over.</p>
+    <p class="lede">Hatch mystery eggs, raise ten adorable breeds and build the coziest lounge on the block.</p>
     <div class="cta">
       <a class="store js-download" href="#download" aria-label="Download Club Kitten on the App Store">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.64c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.78-3.32-1.8-1.41-.14-2.76.83-3.47.83-.72 0-1.82-.81-2.99-.79-1.54.02-2.96.9-3.75 2.27-1.6 2.78-.41 6.89 1.15 9.14.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.77.74 2.98.72 1.23-.02 2.01-1.12 2.76-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.39-.92-2.4-3.66zM14.1 5.9c.63-.77 1.06-1.83.94-2.9-.91.04-2.02.61-2.67 1.37-.58.67-1.1 1.76-.96 2.8 1.02.08 2.06-.52 2.69-1.27z"/></svg>
@@ -268,176 +268,19 @@
   </div>
 </header>
 
-<div class="wrap strip reveal">
-  <div class="stat"><b>10</b><span>breeds to collect</span></div>
-  <div class="stat"><b>4</b><span>rarity tiers</span></div>
-  <div class="stat"><b>20+</b><span>pieces of furniture</span></div>
-  <div class="stat"><b>4</b><span>places to call home</span></div>
-</div>
-
-<section id="breeds">
-  <div class="wrap center">
-    <div class="reveal">
-      <div class="kicker">Gotta hatch 'em all</div>
-      <h2>Every egg is a surprise</h2>
-      <p class="sub">From everyday tabbies to the ultra-rare Scottish Fold. You can only keep one of each breed, so every new face in your family counts.</p>
-    </div>
-    <div class="rarity-row reveal">
-      <span class="chip"><i class="dot" style="background:var(--basic)"></i>Basic</span>
-      <span class="chip"><i class="dot" style="background:var(--rare)"></i>Rare</span>
-      <span class="chip"><i class="dot" style="background:var(--epic)"></i>Epic</span>
-      <span class="chip"><i class="dot" style="background:var(--legendary)"></i>Legendary</span>
-    </div>
-    <div class="breeds reveal" id="breed-grid"></div>
-  </div>
-</section>
-
 <section id="parade" style="padding-top: 0;">
   <div class="wrap center">
     <div class="reveal">
-      <div class="kicker">New in 1.4 <span class="new">New</span></div>
-      <h2>They really walk</h2>
-      <p class="sub">Every breed strolls around your lounge, hops when you tap it, and turns to sit and say hi when it stops.</p>
+      <h2>Ten breeds. One cozy lounge.</h2>
+      <p class="sub">Hatch them, raise them, decorate for them, and visit your friends.</p>
     </div>
     <div class="parade reveal" id="parade-floor" aria-label="All ten cat breeds walking across a lounge"></div>
     <p class="parade-hint">Tap a cat to make it jump 🐾</p>
   </div>
 </section>
 
-<section id="features" style="padding-top: 24px;">
-  <div class="wrap">
-    <div class="feature reveal">
-      <div class="copy">
-        <div class="kicker">Hatch</div>
-        <h2>Tap, tap, crack… hello!</h2>
-        <p class="sub">Warm your eggs, wait for the wobble, then tap to meet your new kitten. Name them, love them, and watch them grow up in real time.</p>
-        <ul>
-          <li><i>🥚</i>Eggs from the shop, challenges and playdates</li>
-          <li><i>🎂</i>Your cats get older every real day, with ages in human years</li>
-          <li><i>🏨</i>Got a duplicate? It moves into the Kitty Hotel and says thanks with coins</li>
-        </ul>
-      </div>
-      <div class="visual">
-        <div class="phone"><img src="assets/shots/01-hatch.jpg" alt="Hatching an egg in Club Kitten" loading="lazy"></div>
-        <img class="sticker" src="assets/cats/tabby.png" alt="" style="left:-4%; bottom:6%;" loading="lazy">
-      </div>
-    </div>
-
-    <div class="feature flip reveal">
-      <div class="copy">
-        <div class="kicker">Play</div>
-        <h2>Minigames that level you up</h2>
-        <p class="sub">Friendly battles, quick minigames and daily challenges. Win coins, earn XP, and turn a tiny kitten into a proper legend.</p>
-        <ul>
-          <li><i>⚔️</i>Gentle, cartoon cat battles in the arena</li>
-          <li><i>🎯</i>New daily challenges and a streak to keep</li>
-          <li><i>🪙</i>Coins for everything you do, spent in the shop</li>
-        </ul>
-      </div>
-      <div class="visual">
-        <div class="phone"><img src="assets/shots/05-battle.jpg" alt="A friendly cat battle" loading="lazy"></div>
-        <img class="sticker" src="assets/cats/bengal.png" alt="" style="right:-2%; top:4%;" loading="lazy">
-      </div>
-    </div>
-
-    <div class="feature reveal">
-      <div class="copy">
-        <div class="kicker">Decorate</div>
-        <h2>Your lounge, your style</h2>
-        <p class="sub">Pick wallpapers, floors and furniture, try them on before you buy, and arrange everything just so. Your cats wander around, nap and play in the space you made.</p>
-        <ul>
-          <li><i>🛋️</i>Cardboard castles, royal thrones, fireplaces and more</li>
-          <li><i>🎨</i>Tint any item to match your room</li>
-          <li><i>👀</i>Preview in your own lounge before spending a coin</li>
-        </ul>
-      </div>
-      <div class="visual">
-        <div class="phone"><img src="assets/shots/03-lounge.jpg" alt="A decorated Cat Lounge" loading="lazy"></div>
-        <img class="sticker" src="assets/furniture/throne.png" alt="" style="left:-2%; top:8%;" loading="lazy">
-      </div>
-    </div>
-
-    <div class="feature flip reveal">
-      <div class="copy">
-        <div class="kicker">Friends</div>
-        <h2>Visit, sign the guestbook, hatch together</h2>
-        <p class="sub">Invite friends through Game Center, pop over to their lounges, leave stickers in their guestbook and set up playdates that hatch surprise eggs.</p>
-        <ul>
-          <li><i>💌</i>Invite friends with a link or through Game Center</li>
-          <li><i>🥚</i>Playdates lay eggs you can't get anywhere else</li>
-          <li><i>☁️</i>Cloud save keeps your cats safe</li>
-        </ul>
-      </div>
-      <div class="visual">
-        <div class="phone"><img src="assets/shots/02-den.jpg" alt="Your cat's den" loading="lazy"></div>
-        <img class="sticker" src="assets/cats/siamese.png" alt="" style="right:-4%; bottom:8%;" loading="lazy">
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="places" style="padding-top: 0;">
-  <div class="wrap center">
-    <div class="reveal">
-      <div class="kicker">Grow your world <span class="new">New</span></div>
-      <h2>Start small. Dream big.</h2>
-      <p class="sub">Everyone begins with a cozy little lounge. Add more rooms as your family grows, then save up for a sunny park, a grand museum or a whole mansion.</p>
-    </div>
-    <div class="how reveal">
-      <span><b>+</b>Build another room</span>
-      <span><b>‹ ›</b>Walk between rooms</span>
-      <span><b>🔓</b>Preview a place, then move in</span>
-    </div>
-    <div class="places reveal">
-      <div class="place">
-        <img src="assets/places/lounge.jpg" alt="A decorated lounge with cats" loading="lazy">
-        <h3>🛋️ Lounge</h3>
-        <p>Your starter home. Pick the walls, floor and wallpaper.</p>
-        <span class="price free">Included</span><small class="rooms">Up to 3 rooms</small>
-      </div>
-      <div class="place">
-        <img src="assets/places/park.jpg" alt="Cats in the Sunny Park" loading="lazy">
-        <h3>🌳 Sunny Park</h3>
-        <p>Blue skies, soft grass and a picket fence. Perfect for zoomies.</p>
-        <span class="price">🪙 500</span><small class="rooms">Up to 3 meadows</small>
-      </div>
-      <div class="place">
-        <img src="assets/places/museum.jpg" alt="Cats in the Cat Museum" loading="lazy">
-        <h3>🏛️ Cat Museum</h3>
-        <p>Marble floors and grand columns to show off your finest pieces.</p>
-        <span class="price">🪙 1,000</span><small class="rooms">Up to 3 galleries</small>
-      </div>
-      <div class="place">
-        <img src="assets/places/mansion.jpg" alt="Cats in the Mansion" loading="lazy">
-        <h3>👑 Mansion</h3>
-        <p>Chandeliers, velvet walls and wing after wing of luxury.</p>
-        <span class="price">🪙 2,000</span><small class="rooms">Up to 4 wings</small>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section style="padding-top: 0;">
-  <div class="wrap">
-    <div class="band center reveal">
-      <div class="kicker">The shop</div>
-      <h2>Fresh deals every day</h2>
-      <p class="sub">Spend the coins you win on furniture, wallpapers and eggs. You only need one of each, and there's always something new to try on.</p>
-      <div class="furniture">
-        <img src="assets/furniture/boxCastle.png" alt="Cardboard box castle" loading="lazy">
-        <img src="assets/furniture/throne.png" alt="Royal throne" loading="lazy">
-        <img src="assets/furniture/fireplace.png" alt="Cozy fireplace" loading="lazy">
-        <img src="assets/furniture/beanBag.png" alt="Bean bag" loading="lazy">
-        <img src="assets/furniture/monstera.png" alt="Monstera plant" loading="lazy">
-        <img src="assets/furniture/pawClock.png" alt="Paw clock" loading="lazy">
-      </div>
-    </div>
-  </div>
-</section>
-
 <section style="padding-top: 0;">
   <div class="center wrap reveal">
-    <div class="kicker">A peek inside</div>
     <h2>Made for cat people</h2>
   </div>
   <div class="shots reveal">
@@ -487,12 +330,6 @@
   // The App Store listing. Leave empty to show "Coming soon" on the buttons instead.
   const APP_STORE_URL = "https://apps.apple.com/app/club-kitten/id6816022537";
 
-  const breeds = [
-    ["cream", "Cream", "basic"], ["tabby", "Tabby", "basic"], ["tuxedo", "Tuxedo", "basic"],
-    ["calico", "Calico", "rare"], ["siamese", "Siamese", "rare"], ["russianBlue", "Russian Blue", "rare"],
-    ["maineCoon", "Maine Coon", "epic"], ["bengal", "Bengal", "epic"],
-    ["britishShorthair", "British Shorthair", "legendary"], ["scottishFold", "Scottish Fold", "legendary"],
-  ];
   // The parade uses the app's own walk and jump frames (one strip image per clip).
   const SPRITES = {"cream": {"walk": {"n": 12, "w": 201, "h": 180}, "jump": {"n": 19, "w": 227, "h": 218}}, "tabby": {"walk": {"n": 11, "w": 215, "h": 180}, "jump": {"n": 22, "w": 221, "h": 207}}, "tuxedo": {"walk": {"n": 13, "w": 211, "h": 180}, "jump": {"n": 22, "w": 219, "h": 209}}, "calico": {"walk": {"n": 14, "w": 216, "h": 180}, "jump": {"n": 22, "w": 224, "h": 216}}, "siamese": {"walk": {"n": 12, "w": 205, "h": 180}, "jump": {"n": 22, "w": 220, "h": 210}}, "russianBlue": {"walk": {"n": 12, "w": 200, "h": 180}, "jump": {"n": 22, "w": 219, "h": 217}}, "maineCoon": {"walk": {"n": 16, "w": 189, "h": 180}, "jump": {"n": 22, "w": 197, "h": 194}}, "bengal": {"walk": {"n": 11, "w": 208, "h": 180}, "jump": {"n": 22, "w": 225, "h": 207}}, "britishShorthair": {"walk": {"n": 12, "w": 207, "h": 180}, "jump": {"n": 22, "w": 230, "h": 216}}, "scottishFold": {"walk": {"n": 14, "w": 209, "h": 180}, "jump": {"n": 22, "w": 217, "h": 208}}};
   const NAMES = {"cream": "Cream puff", "tabby": "Orange tabby", "tuxedo": "Tuxedo", "calico": "Calico", "siamese": "Siamese", "russianBlue": "Russian Blue", "maineCoon": "Maine Coon", "bengal": "Bengal", "britishShorthair": "British Shorthair", "scottishFold": "Scottish Fold"};
@@ -515,22 +352,25 @@
       el.innerHTML = `<div class="cat" style="background-image:url(assets/walk/${b}-walk.webp)"></div><span class="name">${NAMES[b]}</span>`;
       el.addEventListener("click", () => {
         if (el.classList.contains("jumping")) return;
-        const j = m.jump, js = s;
-        const cat = el.querySelector(".cat");
-        el.style.setProperty("--jn", j.n); el.style.setProperty("--jdur", `${j.n / 12}s`);
-        Object.assign(cat.style, { backgroundImage: `url(assets/walk/${b}-jump.webp)`, backgroundSize: `${j.w * js * j.n}px 100%`,
-          width: `${j.w * js}px`, height: `${j.h * js}px`, marginLeft: `${(m.walk.w - j.w) * js / 2}px` });
-        el.style.setProperty("--strip", `${j.w * js * j.n}px`);
-        el.style.animationPlayState = "paused";
+        const j = m.jump, jw = j.w * s, jh = j.h * s;
+        const layer = document.createElement("div");
+        layer.className = "jump";
+        layer.style.cssText = `width:${jw}px;height:${jh}px;background-image:url(assets/walk/${b}-jump.webp);` +
+          `background-size:${jw * j.n}px 100%;--jn:${j.n - 1};--jdur:${(j.n - 1) / 12}s;--jstrip:${jw * j.n}px;--jw:${jw}px`;
+        el.appendChild(layer);
         el.classList.add("jumping");
-        setTimeout(() => {
+        el.style.animationPlayState = "paused";   // stop strolling while it jumps
+        const done = () => {
+          if (!layer.isConnected) return;
+          layer.remove();
           el.classList.remove("jumping");
-          Object.assign(cat.style, { backgroundImage: `url(assets/walk/${b}-walk.webp)`, backgroundSize: "", width: "", height: "", marginLeft: "" });
-          el.style.setProperty("--strip", `${m.walk.w * s * m.walk.n}px`);
           el.style.animationPlayState = "";
-        }, (j.n / 12) * 1000);
+        };
+        layer.addEventListener("animationend", done, { once: true });
+        setTimeout(done, ((j.n - 1) / 12) * 1000 + 600);   // in case a browser skips animationend
       });
       floor.appendChild(el);
+      new Image().src = `assets/walk/${b}-jump.webp`;   // ready before the first tap
     });
   };
   // Load the strips only when the parade scrolls into view.
@@ -542,12 +382,6 @@
   let resizeTimer;
   addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => floor.children.length && buildParade(), 250); });
 
-  document.getElementById("breed-grid").innerHTML = breeds.map(([id, name, tier]) => `
-    <div class="breed ${tier}">
-      <div class="pic"><img src="assets/cats/${id}.png" alt="${name} kitten" loading="lazy"></div>
-      <h3>${name}</h3>
-      <div class="tier" style="color:var(--${tier})">${tier}</div>
-    </div>`).join("");
 
   // Shows the price from the visitor's own App Store (2,99 € in Germany, £2.99 in the UK, …).
   // Falls back to the US price already in the page.
