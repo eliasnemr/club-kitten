@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Club Kitten</title>
-<meta name="description" content="Hatch, raise and play with cute cats. Collect 10 breeds, grow your lounge into a park, museum or mansion, and visit friends. Free on iPhone.">
+<meta name="description" content="Hatch, raise and play with cute cats. Collect 10 breeds, grow your lounge into a park, museum or mansion, and visit friends. $2.99 on iPhone, no ads.">
 <meta property="og:title" content="Club Kitten: hatch, raise and play with cute cats">
 <meta property="og:description" content="Crack mystery eggs, collect 10 breeds from Basic to Legendary, and build the coziest Cat Lounge on the block.">
 <meta property="og:image" content="https://eliasnemr.github.io/club-kitten/assets/shots/01-hatch.jpg">
@@ -221,7 +221,7 @@
 
 <header class="hero" id="top">
   <div class="wrap">
-    <span class="eyebrow">🐾 Free on iPhone</span>
+    <span class="eyebrow">🐾 <span class="js-price">$2.99</span> on iPhone</span>
     <h1>Hatch a kitten. <em>Raise a legend.</em></h1>
     <p class="lede">Crack mystery eggs, collect 10 adorable breeds, play minigames and build the coziest Cat Lounge on the block. Then invite your friends over.</p>
     <div class="cta">
@@ -365,7 +365,7 @@
         <img src="assets/places/lounge.jpg" alt="A decorated lounge with cats" loading="lazy">
         <h3>🛋️ Lounge</h3>
         <p>Your starter home. Pick the walls, floor and wallpaper.</p>
-        <span class="price free">Free</span><small class="rooms">Up to 3 rooms</small>
+        <span class="price free">Included</span><small class="rooms">Up to 3 rooms</small>
       </div>
       <div class="place">
         <img src="assets/places/park.jpg" alt="Cats in the Sunny Park" loading="lazy">
@@ -439,7 +439,7 @@
           <span><small class="js-store-top">Download on the</small><b>App Store</b></span>
         </a>
       </div>
-      <p class="cta-note js-note" style="margin-top:16px;">Free · iPhone · iOS 17 or later</p>
+      <p class="cta-note" style="margin-top:16px;"><span class="js-price">$2.99</span> one-time · No ads · iPhone · iOS 17 or later</p>
     </div>
   </div>
 </section>
@@ -471,6 +471,18 @@
       <h3>${name}</h3>
       <div class="tier" style="color:var(--${tier})">${tier}</div>
     </div>`).join("");
+
+  // Shows the price from the visitor's own App Store (2,99 € in Germany, £2.99 in the UK, …).
+  // Falls back to the US price already in the page.
+  (async () => {
+    const tag = (navigator.languages || [navigator.language || ""]).find(l => /-[A-Za-z]{2}$/.test(l));
+    const country = tag ? tag.slice(-2).toLowerCase() : "us";
+    try {
+      const res = await fetch(`https://itunes.apple.com/lookup?id=6816022537&country=${country}`);
+      const price = (await res.json()).results?.[0]?.formattedPrice;
+      if (price) document.querySelectorAll(".js-price").forEach(el => { el.textContent = price; });
+    } catch {}
+  })();
 
   document.querySelectorAll(".js-download").forEach(a => {
     if (APP_STORE_URL) { a.href = APP_STORE_URL; a.target = "_blank"; a.rel = "noopener"; }
