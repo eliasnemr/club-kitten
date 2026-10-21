@@ -131,6 +131,20 @@
   .visual { position: relative; }
   .sticker { position: absolute; width: 130px; filter: drop-shadow(0 12px 20px rgba(60, 20, 30, .18)); }
 
+  /* Parade: cats walking across a lounge floor */
+  .parade { position: relative; height: 230px; margin-top: 30px; border-radius: 32px; overflow: hidden;
+    background: linear-gradient(#FBE4E9 0 58%, #fff 58% 59.5%, #E2C29E 59.5% 100%); }
+  .walker { position: absolute; left: 0; bottom: var(--floor); height: var(--h); width: var(--w);
+    animation: stroll var(--dur) linear var(--delay) infinite; cursor: pointer; z-index: var(--z); }
+  .walker .cat { width: 100%; height: 100%; background-size: var(--strip) 100%; background-repeat: no-repeat;
+    animation: frames var(--fdur) steps(var(--n)) infinite; }
+  .walker.jumping .cat { animation: frames var(--jdur) steps(var(--jn)) 1 forwards; }
+  .walker .name { position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%); white-space: nowrap;
+    background: #fff; border-radius: 999px; padding: 1px 9px; font-size: 11px; font-weight: 800; color: var(--text); }
+  @keyframes stroll { from { transform: translateX(-160px); } to { transform: translateX(calc(var(--track) + 40px)); } }
+  @keyframes frames { from { background-position: 0 0; } to { background-position: calc(-1 * var(--strip)) 0; } }
+  .parade-hint { margin-top: 14px; color: var(--muted); font-size: 14px; font-weight: 700; }
+
   /* Places */
   .places { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 34px; text-align: left; }
   .place { background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 10px 10px 16px; transition: transform .2s; }
@@ -179,6 +193,7 @@
   @media (prefers-reduced-motion: reduce) {
     .reveal { opacity: 1; transform: none; transition: none; }
     .float { animation: none; }
+    .walker, .walker .cat { animation: none !important; }
     html { scroll-behavior: auto; }
   }
 
@@ -212,6 +227,7 @@
     <a class="brand" href="#top"><img src="assets/icon.png" alt="">Club Kitten</a>
     <div class="nav-links">
       <a href="#breeds">Breeds</a>
+      <a href="#parade">Cats</a>
       <a href="#features">Features</a>
       <a href="#places">Places</a>
       <a class="btn small js-download" href="#download">Get the app</a>
@@ -273,6 +289,18 @@
       <span class="chip"><i class="dot" style="background:var(--legendary)"></i>Legendary</span>
     </div>
     <div class="breeds reveal" id="breed-grid"></div>
+  </div>
+</section>
+
+<section id="parade" style="padding-top: 0;">
+  <div class="wrap center">
+    <div class="reveal">
+      <div class="kicker">New in 1.4 <span class="new">New</span></div>
+      <h2>They really walk</h2>
+      <p class="sub">Every breed strolls around your lounge, hops when you tap it, and turns to sit and say hi when it stops.</p>
+    </div>
+    <div class="parade reveal" id="parade-floor" aria-label="All ten cat breeds walking across a lounge"></div>
+    <p class="parade-hint">Tap a cat to make it jump 🐾</p>
   </div>
 </section>
 
@@ -465,6 +493,55 @@
     ["maineCoon", "Maine Coon", "epic"], ["bengal", "Bengal", "epic"],
     ["britishShorthair", "British Shorthair", "legendary"], ["scottishFold", "Scottish Fold", "legendary"],
   ];
+  // The parade uses the app's own walk and jump frames (one strip image per clip).
+  const SPRITES = {"cream": {"walk": {"n": 12, "w": 201, "h": 180}, "jump": {"n": 19, "w": 227, "h": 218}}, "tabby": {"walk": {"n": 11, "w": 215, "h": 180}, "jump": {"n": 22, "w": 221, "h": 207}}, "tuxedo": {"walk": {"n": 13, "w": 211, "h": 180}, "jump": {"n": 22, "w": 219, "h": 209}}, "calico": {"walk": {"n": 14, "w": 216, "h": 180}, "jump": {"n": 22, "w": 224, "h": 216}}, "siamese": {"walk": {"n": 12, "w": 205, "h": 180}, "jump": {"n": 22, "w": 220, "h": 210}}, "russianBlue": {"walk": {"n": 12, "w": 200, "h": 180}, "jump": {"n": 22, "w": 219, "h": 217}}, "maineCoon": {"walk": {"n": 16, "w": 189, "h": 180}, "jump": {"n": 22, "w": 197, "h": 194}}, "bengal": {"walk": {"n": 11, "w": 208, "h": 180}, "jump": {"n": 22, "w": 225, "h": 207}}, "britishShorthair": {"walk": {"n": 12, "w": 207, "h": 180}, "jump": {"n": 22, "w": 230, "h": 216}}, "scottishFold": {"walk": {"n": 14, "w": 209, "h": 180}, "jump": {"n": 22, "w": 217, "h": 208}}};
+  const NAMES = {"cream": "Cream puff", "tabby": "Orange tabby", "tuxedo": "Tuxedo", "calico": "Calico", "siamese": "Siamese", "russianBlue": "Russian Blue", "maineCoon": "Maine Coon", "bengal": "Bengal", "britishShorthair": "British Shorthair", "scottishFold": "Scottish Fold"};
+  const floor = document.getElementById("parade-floor");
+  const buildParade = () => {
+    const track = floor.clientWidth;
+    const all = ["cream", "britishShorthair", "tuxedo", "siamese", "maineCoon", "calico", "scottishFold", "bengal", "russianBlue", "tabby"];
+    // Phones get six slightly smaller cats, so each has room to walk.
+    const narrow = track < 600;
+    const order = narrow ? all.slice(0, 6) : all;
+    floor.innerHTML = "";
+    order.forEach((b, i) => {
+      const m = SPRITES[b], walkH = narrow ? 74 : 90, s = walkH / m.walk.h;
+      const lane = i % 2, dur = 26 + (i % 3) * 3;
+      const el = document.createElement("div");
+      el.className = "walker";
+      el.style.cssText = `--h:${walkH}px;--w:${m.walk.w * s}px;--n:${m.walk.n};--strip:${m.walk.w * s * m.walk.n}px;` +
+        `--fdur:${m.walk.n / 12}s;--dur:${dur}s;--delay:${-(i * dur) / order.length}s;--track:${track}px;` +
+        `--floor:${lane ? 22 : (narrow ? 62 : 54)}px;--z:${lane ? 2 : 1}`;
+      el.innerHTML = `<div class="cat" style="background-image:url(assets/walk/${b}-walk.webp)"></div><span class="name">${NAMES[b]}</span>`;
+      el.addEventListener("click", () => {
+        if (el.classList.contains("jumping")) return;
+        const j = m.jump, js = s;
+        const cat = el.querySelector(".cat");
+        el.style.setProperty("--jn", j.n); el.style.setProperty("--jdur", `${j.n / 12}s`);
+        Object.assign(cat.style, { backgroundImage: `url(assets/walk/${b}-jump.webp)`, backgroundSize: `${j.w * js * j.n}px 100%`,
+          width: `${j.w * js}px`, height: `${j.h * js}px`, marginLeft: `${(m.walk.w - j.w) * js / 2}px` });
+        el.style.setProperty("--strip", `${j.w * js * j.n}px`);
+        el.style.animationPlayState = "paused";
+        el.classList.add("jumping");
+        setTimeout(() => {
+          el.classList.remove("jumping");
+          Object.assign(cat.style, { backgroundImage: `url(assets/walk/${b}-walk.webp)`, backgroundSize: "", width: "", height: "", marginLeft: "" });
+          el.style.setProperty("--strip", `${m.walk.w * s * m.walk.n}px`);
+          el.style.animationPlayState = "";
+        }, (j.n / 12) * 1000);
+      });
+      floor.appendChild(el);
+    });
+  };
+  // Load the strips only when the parade scrolls into view.
+  let paradeBuilt = false;
+  const startParade = () => { if (!paradeBuilt) { paradeBuilt = true; buildParade(); } };
+  new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { startParade(); o.disconnect(); } }, { rootMargin: "300px" }).observe(floor);
+  // Some embedded browsers never report visibility; start a little after load anyway.
+  addEventListener("load", () => setTimeout(startParade, 2500));
+  let resizeTimer;
+  addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => floor.children.length && buildParade(), 250); });
+
   document.getElementById("breed-grid").innerHTML = breeds.map(([id, name, tier]) => `
     <div class="breed ${tier}">
       <div class="pic"><img src="assets/cats/${id}.png" alt="${name} kitten" loading="lazy"></div>
