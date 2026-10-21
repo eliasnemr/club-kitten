@@ -13,6 +13,8 @@ struct LoungeView: View {
     @State private var limitAlert = false
     @State private var room = 0
     @State private var build: BuildOption?
+    /// Bumped after buying a place or room, to throw confetti over it.
+    @State private var celebrate = 0
 
     var body: some View {
         let place = store.lounge.place
@@ -34,6 +36,7 @@ struct LoungeView: View {
                                  onPetCat: { cat in if store.cats.contains(where: { $0.id == cat.id }) { store.record(.petCats) } },
                                  room: r)
                     }
+                    .overlay { if celebrate > 0 { ConfettiView(count: 50).id(celebrate) } }
                     if let online = store.online, online.isLive {
                         if let v = online.visitors.first, let f = store.friend(v.userID) { visitorBanner(f) }
                     } else if let v = store.visitor, let f = store.friend(v.friendID) {
@@ -43,7 +46,8 @@ struct LoungeView: View {
                         ActionTile(icon: "bag.fill", title: "Shop") { showShop = true }
                         ActionTile(icon: "paintbrush.fill", title: "Decorate", badge: store.lounge.stored.count) { showDecorate = true }
                         ActionTile(icon: "book.closed.fill", title: "Guests", badge: store.unthanked) { showGuestbook = true }
-                        ActionTile(icon: "person.2.fill", title: "Friends") { showFriends = true }
+                        ActionTile(icon: "person.2.fill", title: "Friends",
+                                   badge: store.online?.requests.filter(\.incoming).count ?? 0) { showFriends = true }
                     }
                     Text(store.nextRoomPrice(place) != nil && store.lounge.rooms(in: place) == 1
                          ? "Your cats wander here. Tap one to pet it. Need more space? Tap + to build another \(place.roomWord)."
@@ -56,7 +60,10 @@ struct LoungeView: View {
         }
         .fullScreenCover(isPresented: $showDecorate) { DecorateView(room: $room) }
         .sheet(item: $build) { option in
-            BuildSheet(option: option) { _, r in withAnimation { room = r } }
+            BuildSheet(option: option) { _, r in
+                withAnimation { room = r }
+                celebrate += 1
+            }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
@@ -79,6 +86,9 @@ struct LoungeView: View {
         } message: {
             Text("You get \(GameStore.playdatesPerDay) playdates a day. Come back tomorrow!")
         }
+        // A challenge's Go button can ask for the shop or the friends list.
+        .onAppear { openRoute() }
+        .onChange(of: store.loungeRoute) { _, _ in openRoute() }
         #if DEBUG
         .onAppear {
             let args = ProcessInfo.processInfo.arguments
@@ -93,6 +103,15 @@ struct LoungeView: View {
             if args.contains("-extend") { build = .room(store.lounge.place) }
         }
         #endif
+    }
+
+    private func openRoute() {
+        guard let route = store.loungeRoute else { return }
+        store.loungeRoute = nil
+        switch route {
+        case .shop: showShop = true
+        case .friends: showFriends = true
+        }
     }
 
     private var shelfBreeds: [Breed] {
@@ -241,7 +260,6 @@ struct FriendsView: View {
     @State private var playdate: Friend?
     @State private var limitAlert = false
     @State private var debugVisit = false
-    @State private var request: PlaydateRequest?
     @State private var showBlocked = false
 
     var body: some View {
@@ -252,11 +270,8 @@ struct FriendsView: View {
                 }
             }
             OnlineStatusCard()
-            if let online = store.online, online.isLive {
-                ForEach(online.invites) { inv in
-                    if let f = store.friend(inv.hostID) { onlineInvite(inv, from: f) }
-                }
-            } else if let id = store.invite, let f = store.friend(id) {
+            // Online invites show in the banner at the top of every screen (InviteBanner).
+            if store.online?.isLive != true, let id = store.invite, let f = store.friend(id) {
                 Button {
                     if store.startPlaydate() { playdate = f } else { limitAlert = true }
                 } label: {
@@ -276,6 +291,7 @@ struct FriendsView: View {
                 }
                 .buttonStyle(PressableStyle())
             }
+            FriendRequestsSection()
             if store.friends.isEmpty {
                 InviteFriendsCard()
             } else {
@@ -283,29 +299,42 @@ struct FriendsView: View {
             }
             ForEach(store.friends) { f in
                 Card(padding: 12) {
-                    HStack(spacing: 12) {
-                        CatAvatar(cat: f.star, size: 52)
+                    HStack(spacing: 10) {
+                        CatAvatar(cat: f.star, size: 48)
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 6) {
-                                Text(f.name).font(Theme.font(16, .bold))
+                                Text(f.name).font(Theme.font(16, .bold)).lineLimit(1).truncationMode(.tail)
                                 Circle().fill(f.online ? Theme.success : Theme.border).frame(width: 9, height: 9)
                                     .accessibilityLabel(f.online ? "online" : "offline")
                             }
-                            Text(f.status).font(Theme.font(12)).foregroundStyle(Theme.muted)
+                            Text(f.status).font(Theme.font(12)).foregroundStyle(Theme.muted).lineLimit(1)
+                            // "Lv" plus a bar that shrinks to fit, so the row never overflows on small phones.
                             HStack(spacing: 6) {
-                                Text("Friendship Lv \(f.level)").font(Theme.font(11, .semibold)).foregroundStyle(Theme.muted)
-                                Capsule().fill(Theme.beige).frame(width: 60, height: 6)
-                                    .overlay(alignment: .leading) { Capsule().fill(Theme.rose).frame(width: 60 * f.progress, height: 6) }
+                                Label("Lv \(f.level)", systemImage: "heart.fill")
+                                    .labelStyle(.titleAndIcon)
+                                    .font(Theme.font(11, .bold)).foregroundStyle(Theme.rose)
+                                    .lineLimit(1).fixedSize()
+                                GeometryReader { geo in
+                                    Capsule().fill(Theme.beige)
+                                        .overlay(alignment: .leading) {
+                                            Capsule().fill(Theme.rose).frame(width: geo.size.width * f.progress)
+                                        }
+                                }
+                                .frame(maxWidth: 60).frame(height: 6)
                             }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Friendship level \(f.level)")
                         }
-                        Spacer(minLength: 0)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .layoutPriority(1)
                         PlayerSafetyMenu(playerID: f.id, name: f.name, context: .friends)
                         NavigationLink {
                             VisitView(friendID: f.id)
                         } label: {
                             Text("Visit").font(Theme.font(14, .bold)).foregroundStyle(Theme.text)
-                                .padding(.horizontal, 16).frame(height: 40)
+                                .padding(.horizontal, 14).frame(height: 40)
                                 .overlay(Capsule().stroke(Theme.border, lineWidth: 1))
+                                .fixedSize()
                         }
                     }
                 }
@@ -343,38 +372,13 @@ struct FriendsView: View {
         .fullScreenCover(item: $playdate) { f in
             if let cat = store.activeCat { PlaydateView(friendID: f.id, myCat: cat, theirCat: f.star) }
         }
-        .fullScreenCover(item: $request) { r in
-            if let cat = store.activeCat { OnlinePlaydateView(friend: r.friend, myCat: cat, invite: r.invite) }
-        }
         .refreshable { await store.online?.refresh() }
+        // Opening Friends always shows everyone's latest lounge and status.
+        .task { await store.online?.refresh() }
         .sheet(isPresented: $showBlocked) { BlockedPlayersView().presentationDragIndicator(.visible) }
         .alert("No playdates left today", isPresented: $limitAlert) {
             Button("OK", role: .cancel) {}
         }
-    }
-}
-
-extension FriendsView {
-    func onlineInvite(_ inv: RemotePlaydate, from f: Friend) -> some View {
-        HStack(spacing: 12) {
-            CatAvatar(cat: inv.hostCat, size: 48, ring: .white)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(f.name) invited you to a playdate").font(Theme.font(15, .bold))
-                Text("\(inv.hostCat.name) (\(inv.hostCat.rarity.title)) wants to meet \(store.activeCat?.name ?? "your cat")")
-                    .font(Theme.font(12)).opacity(0.9)
-            }
-            Spacer(minLength: 0)
-            VStack(spacing: 6) {
-                Button("Join") { request = PlaydateRequest(friend: f, invite: inv) }
-                    .font(Theme.font(15, .heavy))
-                Button("Not now") { store.online?.decline(inv.id) }
-                    .font(Theme.font(11, .semibold)).opacity(0.85)
-            }
-            PlayerSafetyMenu(playerID: f.id, name: f.name, context: .invite).tint(.white)
-        }
-        .foregroundStyle(.white)
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.rose))
     }
 }
 
@@ -473,7 +477,7 @@ struct VisitView: View {
                 if store.isOnline {
                     Button("Invite \(f.name) to a playdate") { request = PlaydateRequest(friend: f, invite: nil) }
                         .buttonStyle(PrimaryButtonStyle())
-                    Text(session?.connected == true ? "You're live in \(f.name)'s lounge. \(f.name) gets your invite right away."
+                    Text(session?.connected == true ? "You're live in \(f.name)'s lounge. Your invite pops up on \(f.name)'s screen."
                                                    : "Connecting to the lounge…")
                         .font(Theme.font(12)).foregroundStyle(Theme.muted).frame(maxWidth: .infinity)
                 } else {
@@ -496,6 +500,8 @@ struct VisitView: View {
             .onAppear { store.record(.visitFriend) }
             .task {
                 guard let online = store.online, online.isLive, session == nil else { return }
+                // Load their latest lounge now; after that it updates live while you're here.
+                await online.refreshFriend(f.id)
                 let s = online.visit(f.id, as: me)
                 session = s
                 await s.join()

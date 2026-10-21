@@ -52,11 +52,13 @@ struct PlayView: View {
     @Environment(GameStore.self) private var store
     @State private var game: Minigame?
     @State private var noEnergy = false
+    /// Briefly highlights the minigames after a challenge's Go button scrolls to them.
+    @State private var highlightGames = false
 
     var body: some View {
         @Bindable var store = store
         NavigationStack {
-            content
+            ScrollViewReader { proxy in content(proxy) }
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(isPresented: $store.showArena) {
                     BattleLobbyView().navigationBarTitleDisplayMode(.inline)
@@ -87,16 +89,35 @@ struct PlayView: View {
         .foregroundStyle(Theme.text)
     }
 
-    private var content: some View {
+    private func content(_ proxy: ScrollViewProxy) -> some View {
         Screen {
-            ScreenHeader(eyebrow: "Play with \(store.activeCat?.name ?? "your cat")", title: "Play") { EnergyPill() }
+            ScreenHeader(eyebrow: "Play with \(store.activeCat?.name ?? "your cat")", title: "Play") {
+                CoinPill()
+                EnergyPill()
+            }
             if store.activeCat != nil {
-                ChallengesCard()
+                ChallengesCard(onGo: { kind in
+                    // Already on Play: minigame challenges scroll down to the games instead.
+                    guard kind == .playGames || kind == .highScore else { return false }
+                    withAnimation(.easeInOut(duration: 0.5)) { proxy.scrollTo("minigames", anchor: .top) }
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(450))
+                        withAnimation(.easeInOut(duration: 0.3)) { highlightGames = true }
+                        try? await Task.sleep(for: .seconds(1.2))
+                        withAnimation(.easeInOut(duration: 0.5)) { highlightGames = false }
+                    }
+                    return true
+                })
                 arenaCard
-                Text("Minigames").font(Theme.font(17, .bold)).padding(.top, 4)
+                Text("Minigames").font(Theme.font(17, .bold)).padding(.top, 4).id("minigames")
                 Text("Each game trains one stat and earns XP and coins. Great scores can win an egg.")
                     .font(Theme.font(14)).foregroundStyle(Theme.muted)
-                ForEach(Minigame.allCases) { g in row(g) }
+                ForEach(Minigame.allCases) { g in
+                    row(g)
+                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Theme.rose, lineWidth: highlightGames ? 3 : 0))
+                        .scaleEffect(highlightGames ? 1.02 : 1)
+                }
             } else {
                 NoCatYet()
             }
@@ -234,7 +255,10 @@ struct MinigameContainer: View {
                     rewardRow(icon: "star.fill", text: "+\(r.xp) XP")
                     rewardRow(icon: "pawprint.circle.fill", text: "+\(r.coins) coins")
                     if let egg = r.egg { rewardRow(icon: "oval.portrait.fill", text: "You found a \(egg.title.lowercased()) egg!") }
-                    if let rep = r.report, rep.levelsGained > 0 { rewardRow(icon: "arrow.up.circle.fill", text: "Level up! Now Lv \(store.cats.first { $0.id == cat.id }?.level ?? cat.level)") }
+                    if let rep = r.report, rep.levelsGained > 0 {
+                        LevelUpBurst(text: "Level up! Now Lv \(store.cats.first { $0.id == cat.id }?.level ?? cat.level)")
+                            .frame(maxWidth: .infinity).padding(.vertical, 6)
+                    }
                     if let rep = r.report, rep.evolved { rewardRow(icon: "sparkles", text: "Grew into \(rep.newStage == .adult ? "an" : "a") \(rep.newStage.title) cat!") }
                 }
                 .padding(.horizontal, 24)

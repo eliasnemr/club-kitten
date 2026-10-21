@@ -38,7 +38,8 @@ struct OnlineStatusCard: View {
                         }
                         Spacer()
                         if let c = online.friendCode {
-                            ShareLink(item: "Visit my cat lounge in Club Kitten! My friend code is \(c)") {
+                            ShareLink(item: AppLinks.invite(code: c),
+                                      message: Text("Be my friend in Club Kitten! Tap the link, or add my code \(c) 🐾")) {
                                 Text("Share").font(Theme.font(14, .bold)).padding(.horizontal, 16).frame(height: 40)
                                     .overlay(Capsule().stroke(Theme.border, lineWidth: 1))
                             }
@@ -80,12 +81,14 @@ struct OnlineStatusCard: View {
         adding = true
         Task {
             do {
-                try await online.addFriend(code: code)
-                message = "Friend added!"
+                switch try await online.addFriend(code: code) {
+                case .requested(let name): message = "Friend request sent to \(name)."
+                case .friends(let name): message = "You and \(name) are now friends!"
+                }
                 code = ""
                 Haptics.success()
             } catch {
-                message = "No player has that code."
+                message = (error.localizedDescription.contains("own code")) ? "That's your own code." : "No player has that code."
                 Haptics.warning()
             }
             adding = false
@@ -410,5 +413,164 @@ struct CloudSaveBadge: View {
     private func color(_ o: OnlineService) -> Color {
         if case .failed = o.sync { return Theme.muted }
         return Theme.success
+    }
+}
+
+// MARK: - Invite banner
+
+/// A playdate invite floating over whatever screen you're on. Shows the newest open invite.
+struct InviteBanner: View {
+    @Environment(GameStore.self) private var store
+    let join: (PlaydateRequest) -> Void
+
+    var body: some View {
+        if let online = store.online, online.isLive, let inv = online.invites.first {
+            let host = online.host(of: inv)
+            HStack(spacing: 12) {
+                CatAvatar(cat: inv.hostCat, size: 46, ring: .white)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(host.name) invited you to a playdate").font(Theme.font(15, .bold)).lineLimit(2)
+                    Text("\(inv.hostCat.name) wants to meet \(store.activeCat?.name ?? "your cat")")
+                        .font(Theme.font(12)).opacity(0.9).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                VStack(spacing: 4) {
+                    Button("Join") {
+                        Haptics.tap(.medium)
+                        join(PlaydateRequest(friend: host, invite: inv))
+                    }
+                    .font(Theme.font(15, .heavy))
+                    .padding(.horizontal, 14).frame(height: 34)
+                    .background(Capsule().fill(.white)).foregroundStyle(Theme.rose)
+                    Button("Not now") { online.decline(inv.id) }
+                        .font(Theme.font(11, .semibold)).opacity(0.85)
+                        .frame(minHeight: 28)
+                }
+                PlayerSafetyMenu(playerID: host.id, name: host.name, context: .invite).tint(.white)
+            }
+            .foregroundStyle(.white)
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.rose)
+                .shadow(color: .black.opacity(0.2), radius: 12, y: 6))
+            .padding(.horizontal, 12)
+            .padding(.top, 4)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .animation(.spring(response: 0.4, dampingFraction: 0.75), value: inv.id)
+            .onAppear { Haptics.success() }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Playdate invite from \(host.name)")
+        }
+    }
+}
+
+
+// MARK: - Friend requests and suggestions
+
+/// Incoming requests (accept or decline), requests you sent, and people you may know.
+struct FriendRequestsSection: View {
+    @Environment(GameStore.self) private var store
+    @State private var busy: Set<UUID> = []
+    @State private var sent: Set<UUID> = []
+
+    var body: some View {
+        if let online = store.online, online.isLive {
+            let incoming = online.requests.filter(\.incoming)
+            let outgoing = online.requests.filter { !$0.incoming }
+            if !incoming.isEmpty {
+                Text("Friend requests").font(Theme.font(17, .bold))
+                ForEach(incoming) { r in
+                    Card(padding: 12) {
+                        HStack(spacing: 10) {
+                            CatAvatar(cat: r.star, size: 46)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(r.displayName).font(Theme.font(16, .bold)).lineLimit(1)
+                                Text("wants to be friends").font(Theme.font(12)).foregroundStyle(Theme.muted)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            PlayerSafetyMenu(playerID: r.playerID, name: r.displayName, context: .friends)
+                            Button("Decline") {
+                                Task { await online.respond(to: r, accept: false) }
+                            }
+                            .font(Theme.font(13, .bold)).foregroundStyle(Theme.muted)
+                            .frame(minHeight: 44)
+                            Button("Accept") {
+                                Haptics.success()
+                                Task {
+                                    await online.respond(to: r, accept: true)
+                                    store.toast("You and \(r.displayName) are now friends! 🐾")
+                                }
+                            }
+                            .font(Theme.font(14, .bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 14).frame(height: 38)
+                            .background(Capsule().fill(Theme.rose))
+                            .fixedSize()
+                        }
+                    }
+                }
+            }
+            if !outgoing.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Waiting for them to accept").font(Theme.font(13, .bold)).foregroundStyle(Theme.muted)
+                    ForEach(outgoing) { r in
+                        HStack(spacing: 10) {
+                            CatAvatar(cat: r.star, size: 32)
+                            Text(r.displayName).font(Theme.font(14, .semibold)).lineLimit(1)
+                            Spacer(minLength: 0)
+                            Button("Cancel") { Task { await online.cancelRequest(to: r.playerID) } }
+                                .font(Theme.font(13, .semibold)).foregroundStyle(Theme.muted)
+                                .frame(minHeight: 44)
+                        }
+                    }
+                }
+            }
+            if !online.suggestions.isEmpty {
+                Text("People you may know").font(Theme.font(17, .bold)).padding(.top, 4)
+                ScrollView(.horizontal) {
+                    HStack(spacing: 10) {
+                        ForEach(online.suggestions) { p in suggestion(p, online: online) }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
+    }
+
+    private func suggestion(_ p: SuggestedPlayer, online: OnlineService) -> some View {
+        VStack(spacing: 8) {
+            CatAvatar(cat: p.star ?? .starter(), size: 58)
+            Text(p.displayName).font(Theme.font(14, .bold)).lineLimit(1)
+            Text(p.why).font(Theme.font(11)).foregroundStyle(Theme.muted).lineLimit(2)
+                .multilineTextAlignment(.center).frame(height: 28)
+            if sent.contains(p.id) {
+                Label("Sent", systemImage: "checkmark").font(Theme.font(13, .bold)).foregroundStyle(Theme.success)
+                    .frame(height: 34)
+            } else {
+                Button {
+                    Haptics.tap(.medium)
+                    busy.insert(p.id)
+                    Task {
+                        if let nowFriends = try? await online.requestFriend(p.playerID) {
+                            if nowFriends { store.toast("You and \(p.displayName) are now friends! 🐾") } else { sent.insert(p.id) }
+                        }
+                        busy.remove(p.id)
+                    }
+                } label: {
+                    Label(busy.contains(p.id) ? "…" : "Add", systemImage: "person.badge.plus")
+                        .font(Theme.font(13, .bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).frame(height: 34)
+                        .background(Capsule().fill(Theme.rose))
+                }
+                .disabled(busy.contains(p.id))
+            }
+        }
+        .padding(12)
+        .frame(width: 140)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white))
+        .contextMenu {
+            Button(role: .destructive) {
+                Task { try? await online.block(p.playerID) }
+            } label: { Label("Block \(p.displayName)", systemImage: "hand.raised") }
+        }
     }
 }

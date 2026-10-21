@@ -10,6 +10,10 @@ struct HatchRevealView: View {
     @State private var taps = 0
     @State private var shake = false
     @State private var fly = false
+    /// The egg crouches just before it bursts.
+    @State private var squash = false
+    @State private var glowPulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var name = ""
     @FocusState private var nameFocused: Bool
 
@@ -137,12 +141,27 @@ struct HatchRevealView: View {
         ZStack {
             RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Theme.beige)
             if phase == .egg {
-                EggView(rarity: rarity, size: 200 * scale, crack: CGFloat(taps) / CGFloat(tapsNeeded))
-                    .rotationEffect(.degrees(shake ? 9 : -9), anchor: .bottom)
+                let progress = CGFloat(taps) / CGFloat(tapsNeeded)
+                // A warm glow in the egg's rarity colour that grows with each tap.
+                Circle()
+                    .fill(RadialGradient(colors: [rarity.color.opacity(0.55), .clear], center: .center,
+                                         startRadius: 0, endRadius: 150 * scale))
+                    .frame(width: 300 * scale, height: 300 * scale)
+                    .opacity(Double(progress) * (glowPulse ? 1 : 0.6))
+                    .scaleEffect(glowPulse ? 1.08 : 0.95)
+                    .animation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: glowPulse)
+                    .onAppear { if !reduceMotion { glowPulse = true } }
+                EggView(rarity: rarity, size: 200 * scale, crack: progress)
+                    // Wobbles harder the closer it is to hatching.
+                    .rotationEffect(.degrees((shake ? 1 : -1) * (reduceMotion ? 4 : 6 + Double(taps) * 3)), anchor: .bottom)
+                    .scaleEffect(x: squash ? 1.12 : 1, y: squash ? 0.84 : 1, anchor: .bottom)
                     .transition(.opacity)
             } else {
+                RarityRays(color: rarity.color, count: rarity == .legendary ? 16 : 10, size: 340 * scale)
+                    .transition(.opacity)
                 CatSprite(cat: cat, size: 260 * scale, mood: .happy)
                     .transition(.scale(scale: 0.2).combined(with: .opacity))
+                if rarity == .legendary || rarity == .epic { Sparkles(size: 300 * scale) }
                 EggHalf(rarity: rarity, top: true, size: 200 * scale)
                     .rotationEffect(.degrees(fly ? -50 : 0))
                     .offset(x: fly ? -130 : 0, y: fly ? -200 : 0)
@@ -164,8 +183,13 @@ struct HatchRevealView: View {
         Haptics.tap(taps >= tapsNeeded ? .heavy : .medium)
         withAnimation(.spring(response: 0.12, dampingFraction: 0.2)) { shake.toggle() }
         if taps >= tapsNeeded {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            // Crouch, then pop.
+            withAnimation(.easeIn(duration: 0.22).delay(0.05)) { squash = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 Haptics.success()
+                if rarity == .legendary {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { Haptics.success() }
+                }
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) { phase = .burst }
                 withAnimation(.easeOut(duration: 0.9).delay(0.05)) { fly = true }
             }
@@ -200,5 +224,33 @@ struct HatchRevealView: View {
         Haptics.success()
         store.adopt(named)
         store.tab = .den
+    }
+}
+
+
+/// Slowly turning light rays behind a freshly hatched cat, in its rarity colour.
+struct RarityRays: View {
+    let color: Color
+    var count = 10
+    let size: CGFloat
+    @State private var spin = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<count, id: \.self) { i in
+                Capsule()
+                    .fill(LinearGradient(colors: [color.opacity(0.45), color.opacity(0)], startPoint: .bottom, endPoint: .top))
+                    .frame(width: size * 0.09, height: size * 0.5)
+                    .offset(y: -size * 0.25)
+                    .rotationEffect(.degrees(Double(i) / Double(count) * 360))
+            }
+            Circle().fill(RadialGradient(colors: [color.opacity(0.35), .clear], center: .center, startRadius: 0, endRadius: size * 0.35))
+        }
+        .frame(width: size, height: size)
+        .rotationEffect(.degrees(spin ? 360 : 0))
+        .animation(reduceMotion ? nil : .linear(duration: 18).repeatForever(autoreverses: false), value: spin)
+        .onAppear { spin = true }
+        .allowsHitTesting(false)
     }
 }

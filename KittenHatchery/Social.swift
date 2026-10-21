@@ -114,6 +114,31 @@ enum Furniture: String, Codable, CaseIterable, Identifiable {
     var onWall: Bool { category == .wallDecor }
     /// Items with fabric that can be recoloured.
     var tintable: Bool { [.cushion, .rug, .catBed, .sofa, .hammock, .catTree].contains(self) }
+    /// How much each piece can be shrunk or enlarged in Decorate. Windows keep their size;
+    /// wall pieces change a little, floor pieces a lot.
+    var scaleRange: ClosedRange<Double> {
+        switch self {
+        case .window: 1...1
+        case .fairyLights, .breedShelf, .painting, .pawClock: 0.75...1.3
+        default: 0.6...1.6
+        }
+    }
+    var resizable: Bool { scaleRange.lowerBound < scaleRange.upperBound }
+    /// Where a cat can sit on this piece, as a fraction of its height from the floor. Nil = not a seat.
+    var seatHeight: CGFloat? {
+        switch self {
+        case .sofa, .beanBag: 0.45
+        case .catBed: 0.3
+        case .cushion: 0.45
+        case .throne: 0.42
+        case .catTree: 0.92
+        case .hammock: 0.55
+        case .boxCastle: 0.96
+        default: nil
+        }
+    }
+    func clampScale(_ s: Double) -> Double { min(scaleRange.upperBound, max(scaleRange.lowerBound, s)) }
+
     /// Size in points for a 340-point-wide room.
     var size: CGSize {
         switch self {
@@ -218,9 +243,11 @@ struct PlacedItem: Codable, Identifiable, Equatable {
     /// Which place and which of its rooms the item is in. Older saves put everything in the lounge's first room.
     var place: Location = .lounge
     var room = 0
+    /// Size relative to the piece's normal size (1 = normal), set in Decorate.
+    var scale: Double = 1
 
     init(kind: Furniture, x: Double, y: Double, flipped: Bool = false, tint: ItemTint? = nil,
-         place: Location = .lounge, room: Int = 0) {
+         place: Location = .lounge, room: Int = 0, scale: Double = 1) {
         self.kind = kind
         self.x = x
         self.y = y
@@ -228,6 +255,7 @@ struct PlacedItem: Codable, Identifiable, Equatable {
         self.tint = tint
         self.place = place
         self.room = room
+        self.scale = kind.clampScale(scale)
     }
 
     init(from decoder: Decoder) throws {
@@ -241,6 +269,7 @@ struct PlacedItem: Codable, Identifiable, Equatable {
         // Lenient, so a place added in a later version doesn't break an older friend's copy.
         place = (try? c.decodeIfPresent(Location.self, forKey: .place)) ?? .lounge
         room = max(0, try c.decodeIfPresent(Int.self, forKey: .room) ?? 0)
+        scale = kind.clampScale((try? c.decodeIfPresent(Double.self, forKey: .scale)) ?? nil ?? 1)
     }
 }
 

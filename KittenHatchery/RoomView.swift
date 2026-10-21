@@ -278,6 +278,8 @@ struct RoomView: View {
     var selectedItem: UUID? = nil
     var onSelectItem: (UUID) -> Void = { _ in }
     var onMoveItem: (UUID, Double, Double) -> Void = { _, _, _ in }
+    /// Pinching the room while an item is selected resizes it (editing only).
+    var onResizeItem: (UUID, Double) -> Void = { _, _ in }
     var onPetCat: (Cat) -> Void = { _ in }
     /// Which place and room to show. Defaults to where the owner is, first room.
     var place: Location? = nil
@@ -287,6 +289,18 @@ struct RoomView: View {
     @State private var facingLeft: Set<UUID> = []
     @State private var drag: [UUID: CGSize] = [:]
     @State private var hearts: [UUID: [FloatingHeart]] = [:]
+    /// Live pinch amount for the selected item, before it's saved.
+    @State private var pinch: CGFloat = 1
+    /// Cats mid-walk (with a token, so an older walk can't end a newer one).
+    @State private var walking: [UUID: UUID] = [:]
+    @State private var jumps: [UUID: Int] = [:]
+    /// Stretching or napping cats.
+    @State private var resting: [UUID: CatAction] = [:]
+    /// Cats sitting on a piece of furniture (cat id → item id).
+    @State private var seated: [UUID: UUID] = [:]
+
+    private var shownPlace: Location { place ?? lounge.place }
+    private var shownItems: [PlacedItem] { lounge.items(in: shownPlace, room: room) }
 
     private var everyone: [(cat: Cat, label: String?, isYou: Bool)] {
         residents.prefix(5).map { ($0, $0.name, false) } + guests.map { ($0.cat, $0.label, $0.isYou) }
@@ -335,16 +349,32 @@ struct RoomView: View {
             }
             .frame(width: w, height: h)
             .clipped()
+            .contentShape(Rectangle())
+            .gesture(editing && selectedItem != nil ? resizeGesture : nil)
             .task(id: everyone.map(\.cat.id)) { await wander() }
         }
         .frame(height: height)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
-    private func itemView(_ item: PlacedItem, w: CGFloat, h: CGFloat, scale: CGFloat) -> some View {
+    private var resizeGesture: some Gesture {
+        MagnifyGesture()
+            .onChanged { v in pinch = v.magnification }
+            .onEnded { v in
+                if let id = selectedItem, let item = lounge.items.first(where: { $0.id == id }) {
+                    onResizeItem(id, item.scale * v.magnification)
+                }
+                pinch = 1
+            }
+    }
+
+    private func itemView(_ item: PlacedItem, w: CGFloat, h: CGFloat, scale roomScale: CGFloat) -> some View {
         let s = item.kind.size
         let off = drag[item.id] ?? .zero
         let selected = selectedItem == item.id
+        // The piece's own size, with a live pinch preview while it's selected.
+        let live = selected ? item.kind.clampScale(item.scale * pinch) : item.scale
+        let scale = roomScale * live
         return FurnitureView(kind: item.kind, scale: scale, shelfBreeds: shelfBreeds, tint: item.tint, portrait: portrait)
             .scaleEffect(x: item.flipped ? -1 : 1, y: 1)
             .padding(4)
@@ -366,12 +396,14 @@ struct RoomView: View {
     }
 
     private func catView(_ cat: Cat, label: String?, isYou: Bool, w: CGFloat, h: CGFloat, scale: CGFloat) -> some View {
-        let p = spots[cat.id] ?? home(for: cat.id)
         let size = 92 * scale
+        let p = seatPoint(for: cat.id, h: h, roomScale: scale) ?? spots[cat.id] ?? home(for: cat.id)
         return VStack(spacing: 2) {
             ZStack {
                 if let b = bubbles[cat.id] { BubbleView(bubble: b).offset(y: -size * 0.62) }
-                CatSprite(cat: cat, size: size, animated: true)
+                CatSprite(cat: cat, size: size, animated: true,
+                          action: walking[cat.id] != nil ? .walk : (resting[cat.id] ?? .idle),
+                          jump: jumps[cat.id, default: 0])
                     .scaleEffect(x: facingLeft.contains(cat.id) ? -1 : 1, y: 1)
                 HeartBurst(hearts: hearts[cat.id] ?? [])
             }
@@ -388,6 +420,8 @@ struct RoomView: View {
         .allowsHitTesting(!editing)
         .onTapGesture {
             Haptics.tap(.soft)
+            jumps[cat.id, default: 0] += 1
+            resting[cat.id] = nil
             hearts[cat.id, default: []].append(FloatingHeart(x: .random(in: -20...20)))
             onPetCat(cat)
         }
@@ -402,15 +436,52 @@ struct RoomView: View {
         return CGPoint(x: 0.18 + 0.64 * Double(i) / Double(max(1, n - 1)), y: 0.78 + Double(i % 2) * 0.1)
     }
 
+    /// Where a seated cat's feet go: on top of its seat, in normalised room coordinates.
+    private func seatPoint(for cat: UUID, h: CGFloat, roomScale: CGFloat) -> CGPoint? {
+        guard let itemID = seated[cat], let item = shownItems.first(where: { $0.id == itemID }),
+              let seat = item.kind.seatHeight, h > 0 else { return nil }
+        let lift = seat * item.kind.size.height * roomScale * item.scale
+        return CGPoint(x: item.x, y: item.y - lift / h)
+    }
+
     private func wander() async {
         guard !editing else { return }
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(Double.random(in: 1.5...3)))
-            guard let mover = everyone.randomElement()?.cat.id else { continue }
+            guard let mover = everyone.randomElement()?.cat.id, resting[mover] != .nap else { continue }
+            let roll = Double.random(in: 0..<1)
+
+            // Sometimes just stretch, or curl up for a nap.
+            if roll < 0.16, resting[mover] == nil {
+                let act: CatAction = Bool.random() ? .stretch : .nap
+                resting[mover] = act
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(act == .nap ? Double.random(in: 5...9) : 1.4))
+                    if resting[mover] == act { resting[mover] = nil }
+                }
+                continue
+            }
+
             let from = spots[mover] ?? home(for: mover)
-            let to = CGPoint(x: Double.random(in: 0.14...0.86), y: Double.random(in: 0.74...0.95))
-            if to.x < from.x { facingLeft.insert(mover) } else { facingLeft.remove(mover) }
-            withAnimation(.easeInOut(duration: 2.4)) { spots[mover] = to }
+            var target = CGPoint(x: Double.random(in: 0.14...0.86), y: Double.random(in: 0.74...0.95))
+            var seat: UUID?
+            // Sometimes hop onto a free sofa, bed, cushion or cat tree.
+            if roll < 0.4, let free = shownItems.filter({ $0.kind.seatHeight != nil && !seated.values.contains($0.id) }).randomElement() {
+                seat = free.id
+                target = CGPoint(x: free.x, y: free.y)
+            }
+            if target.x < from.x { facingLeft.insert(mover) } else { facingLeft.remove(mover) }
+            let token = UUID()
+            walking[mover] = token
+            resting[mover] = nil
+            withAnimation(.easeInOut(duration: 2.4)) {
+                seated[mover] = seat
+                spots[mover] = target
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2.4))
+                if walking[mover] == token { walking[mover] = nil }
+            }
         }
     }
 }

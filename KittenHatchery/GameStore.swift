@@ -98,8 +98,24 @@ final class GameStore {
     var tab: Tab = .den
     /// Opens the battle arena inside the Play tab.
     var showArena = false
+    /// A screen to open on the Lounge tab (from a challenge's Go button). Cleared once opened.
+    var loungeRoute: LoungeRoute?
     /// A freshly hatched cat waiting to be named on the reveal screen.
     var pendingHatch: (cat: Cat, rarity: Rarity)?
+    /// A short message shown at the bottom of any screen (new friend, coins from the arena…).
+    private(set) var toastMessage: String?
+    @ObservationIgnored private var toastTask: Task<Void, Never>?
+
+    func toast(_ text: String) {
+        toastTask?.cancel()
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { toastMessage = text }
+        Haptics.success()
+        toastTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.3)) { toastMessage = nil }
+        }
+    }
     var visitor: Visitor?
     /// A friend who has asked for a playdate.
     var invite: UUID?
@@ -492,6 +508,15 @@ final class GameStore {
         let (cx, cy) = Lounge.clamp(data.lounge.items[i].kind, x: x, y: y)
         data.lounge.items[i].x = cx
         data.lounge.items[i].y = cy
+        save()
+    }
+
+    /// Sets an item's size, kept within what that piece allows.
+    func resizeItem(_ id: UUID, to scale: Double) {
+        guard let i = data.lounge.items.firstIndex(where: { $0.id == id }) else { return }
+        let clamped = data.lounge.items[i].kind.clampScale((scale * 20).rounded() / 20)
+        guard clamped != data.lounge.items[i].scale else { return }
+        data.lounge.items[i].scale = clamped
         save()
     }
 

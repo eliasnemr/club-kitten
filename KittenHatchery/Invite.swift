@@ -1,8 +1,29 @@
 import SwiftUI
 
 enum AppLinks {
-    /// Where invites point. Swap for the App Store link once Club Kitten is live.
+    /// The landing page. Swap for the App Store link once Club Kitten is live.
     static let invite = URL(string: "https://eliasnemr.github.io/club-kitten/")!
+
+    /// Your personal invite: the web page opens Club Kitten (or the App Store) and adds you as a friend.
+    static func invite(code: String?) -> URL {
+        guard let code else { return invite }
+        var c = URLComponents(string: "https://eliasnemr.github.io/club-kitten/add/")!
+        c.queryItems = [URLQueryItem(name: "code", value: code)]
+        return c.url ?? invite
+    }
+}
+
+/// Reads the friend code from an invite link, either the web page or the app's own link.
+enum InviteLink {
+    static func code(from url: URL) -> String? {
+        let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let isApp = url.scheme == "clubkitten" && url.host == "add"
+        let isWeb = url.host == "eliasnemr.github.io" && url.path.hasPrefix("/club-kitten/add")
+        guard isApp || isWeb,
+              let raw = comps?.queryItems?.first(where: { $0.name == "code" })?.value?.uppercased(),
+              raw.range(of: #"^KIT-[0-9A-F]{6}$"#, options: .regularExpression) != nil else { return nil }
+        return raw
+    }
 }
 
 /// Shown when you have no friends in the game yet: invite someone to download it.
@@ -22,7 +43,7 @@ struct InviteFriendsCard: View {
             Text("No friends here yet").font(Theme.font(20, .heavy))
             Text("Club Kitten is more fun with friends. Invite someone to download it, then visit each other's lounges and go on playdates for eggs.")
                 .font(Theme.font(14)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
-            ShareLink(item: AppLinks.invite,
+            ShareLink(item: AppLinks.invite(code: store.online?.friendCode),
                       subject: Text("Play Club Kitten with me"),
                       message: Text(message)) {
                 Label("Invite a friend", systemImage: "square.and.arrow.up")

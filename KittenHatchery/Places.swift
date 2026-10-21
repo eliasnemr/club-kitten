@@ -230,10 +230,12 @@ struct BuildSheet: View {
         case .place(let p):
             guard store.buyPlace(p) else { Haptics.warning(); return }
             Haptics.success()
+            store.toast("Welcome to the \(p.title)! 🎉")
             built(p, 0)
         case .room(let p):
             guard let r = store.extend(p) else { Haptics.warning(); return }
             Haptics.success()
+            store.toast("New \(p.roomWord) built! 🎉")
             built(p, r)
         }
         dismiss()

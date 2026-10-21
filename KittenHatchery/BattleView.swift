@@ -16,6 +16,8 @@ struct Rival: Identifiable {
     let id = UUID()
     let cat: Cat
     let difficulty: Difficulty
+    /// Set when this is another player's defender rather than a wild rival.
+    var player: ArenaDefender? = nil
 }
 
 struct BattleLobbyView: View {
@@ -23,6 +25,9 @@ struct BattleLobbyView: View {
     @State private var rivals: [Rival] = []
     @State private var fight: Rival?
     @State private var noEnergy = false
+    @State private var choosingDefender = false
+
+    private var online: OnlineService? { store.online?.isLive == true ? store.online : nil }
 
     var body: some View {
         Screen {
@@ -44,12 +49,13 @@ struct BattleLobbyView: View {
                         Spacer()
                     }
                 }
+                if let online { defenderCard(online) }
                 HStack {
                     Text("Pick a rival").font(Theme.font(17, .bold))
                     Spacer()
                     Button {
                         Haptics.tap()
-                        rollRivals(for: cat)
+                        Task { await rollRivals(for: cat) }
                     } label: {
                         Label("New rivals", systemImage: "arrow.clockwise").font(Theme.font(14, .bold))
                     }
@@ -63,14 +69,23 @@ struct BattleLobbyView: View {
                 NoCatYet()
             }
         }
-        .onAppear {
-            if rivals.isEmpty, let cat = store.activeCat { rollRivals(for: cat) }
+        .task {
+            if rivals.isEmpty, let cat = store.activeCat { await rollRivals(for: cat) }
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-battle"), fight == nil { fight = rivals.dropFirst().first }
             #endif
         }
-        .onChange(of: store.activeCat?.id) { _, _ in if let cat = store.activeCat { rollRivals(for: cat) } }
-        .fullScreenCover(item: $fight, onDismiss: { if let cat = store.activeCat { rollRivals(for: cat) } }) { rival in
+        .onChange(of: store.activeCat?.id) { _, _ in if let cat = store.activeCat { Task { await rollRivals(for: cat) } } }
+        // Opened before sign-in finished: add real players' defenders once online.
+        .onChange(of: store.online?.isLive == true) { _, live in
+            if live, let cat = store.activeCat, !rivals.contains(where: { $0.player != nil }) {
+                Task { await rollRivals(for: cat) }
+            }
+        }
+        .sheet(isPresented: $choosingDefender) {
+            DefenderPicker().presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(item: $fight, onDismiss: { if let cat = store.activeCat { Task { await rollRivals(for: cat) } } }) { rival in
             if let cat = store.activeCat { BattleView(player: cat, rival: rival) }
         }
         .alert("Out of energy", isPresented: $noEnergy) {
@@ -80,9 +95,48 @@ struct BattleLobbyView: View {
         }
     }
 
-    private func rollRivals(for cat: Cat) {
-        rivals = Difficulty.allCases.map { d in
+    private func rollRivals(for cat: Cat) async {
+        var list = Difficulty.allCases.map { d in
             Rival(cat: .random(rarity: .roll(), level: max(1, cat.level + d.levelOffset)), difficulty: d)
+        }
+        // Up to two real players' defenders, rated by how their level compares to yours.
+        if let online {
+            let players = await online.arenaOpponents(level: cat.level).prefix(2).map { p in
+                let gap = p.level - cat.level
+                let d: Difficulty = gap <= -2 ? .easy : (gap >= 2 ? .tough : .even)
+                return Rival(cat: p.cat, difficulty: d, player: p)
+            }
+            // Keep the arena to four or five rivals: real players replace the easy wild one.
+            list = players + (players.isEmpty ? list : Array(list.dropFirst()))
+        }
+        rivals = list
+    }
+
+    private func defenderCard(_ online: OnlineService) -> some View {
+        Card {
+            HStack(spacing: 12) {
+                Image(systemName: "shield.lefthalf.filled").font(.system(size: 20, weight: .semibold)).foregroundStyle(Theme.rose)
+                    .frame(width: 44, height: 44).background(Circle().fill(Theme.roseTint))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Your defender").font(Theme.font(16, .heavy))
+                    if let d = online.myDefender {
+                        Text("\(d.cat.name) · \(d.wins) \(d.wins == 1 ? "win" : "wins") · \(d.losses) \(d.losses == 1 ? "loss" : "losses") · \(d.coinsEarned) coins earned")
+                            .font(Theme.font(12)).foregroundStyle(Theme.muted).lineLimit(2)
+                    } else {
+                        Text("Put a cat in the arena. Other players fight it, and you earn 10 coins each time it wins.")
+                            .font(Theme.font(12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+                if let d = online.myDefender {
+                    CatAvatar(cat: d.cat, size: 44)
+                }
+            }
+            Button(online.myDefender == nil ? "Choose a defender" : "Change defender") {
+                Haptics.tap()
+                choosingDefender = true
+            }
+            .buttonStyle(SecondaryButtonStyle())
         }
     }
 
@@ -101,9 +155,14 @@ struct BattleLobbyView: View {
                     .frame(width: 72, height: 72)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.beige))
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(rival.cat.name).font(Theme.font(16, .heavy))
-                    Text("Lv \(rival.cat.level) · \(rival.cat.kind.title)").font(Theme.font(13)).foregroundStyle(Theme.muted)
-                    Tag(text: rival.difficulty.title, color: [Theme.success, Theme.warning, Theme.rose][Difficulty.allCases.firstIndex(of: rival.difficulty)!])
+                    Text(rival.cat.name).font(Theme.font(16, .heavy)).lineLimit(1)
+                    Text("Lv \(rival.cat.level) · \(rival.cat.kind.title)").font(Theme.font(13)).foregroundStyle(Theme.muted).lineLimit(1)
+                    HStack(spacing: 6) {
+                        Tag(text: rival.difficulty.title, color: [Theme.success, Theme.warning, Theme.rose][Difficulty.allCases.firstIndex(of: rival.difficulty)!])
+                        if let p = rival.player {
+                            Tag(text: "Player · \(p.displayName)", color: Theme.text).lineLimit(1)
+                        }
+                    }
                 }
                 Spacer()
                 Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
@@ -215,7 +274,8 @@ struct BattleView: View {
         ZStack {
             Theme.cream.ignoresSafeArea()
             if let outcome {
-                BattleResultView(cat: store.cats.first { $0.id == me.cat.id } ?? me.cat, outcome: outcome) { dismiss() }
+                BattleResultView(cat: store.cats.first { $0.id == me.cat.id } ?? me.cat, outcome: outcome,
+                                 opponent: rival.player) { dismiss() }
                     .transition(.opacity)
             } else {
                 fight
@@ -436,6 +496,10 @@ struct BattleView: View {
             store.record(.winBattles)
         }
         store.addCoins(coins)
+        if let p = rival.player {
+            // Their defender won if you lost; its owner may earn coins for it.
+            store.online?.reportArena(defender: p.userID, defenderWon: !won)
+        }
         let report = store.grow(me.cat.id, xp: xp)
         won ? Haptics.success() : Haptics.warning()
         withAnimation(.easeInOut(duration: 0.35)) {
@@ -473,9 +537,13 @@ struct RisingText: View {
 // MARK: - Result
 
 struct BattleResultView: View {
+    @Environment(GameStore.self) private var store
     let cat: Cat
     let outcome: BattleView.Outcome
+    /// The real player you fought, if any; offers to add them as a friend.
+    var opponent: ArenaDefender? = nil
     let done: () -> Void
+    @State private var friendSent = false
     @State private var fill = false
     @State private var showEvolve = false
 
@@ -503,6 +571,7 @@ struct BattleResultView: View {
                     }
                     StatBar(label: "Lv \(cat.level)", value: fill ? Double(cat.xp) : 0, max: Double(cat.xpNeeded), color: Theme.rose)
                     if let r = outcome.report, r.levelsGained > 0 {
+                        LevelUpBurst(text: "Level \(cat.level)!").frame(maxWidth: .infinity).padding(.vertical, 4)
                         Text("\(cat.name) reached level \(cat.level)! +\(r.levelsGained * 2) skill points")
                             .font(Theme.font(14, .bold))
                     }
@@ -533,6 +602,31 @@ struct BattleResultView: View {
                         Text("No hard feelings. \(cat.name) still learned something.").font(Theme.font(13)).foregroundStyle(Theme.muted)
                     }
                 }
+                if let p = opponent, let online = store.online, store.friend(p.userID) == nil {
+                    // Met someone fun in the arena? Ask to be friends.
+                    Card {
+                        HStack(spacing: 12) {
+                            CatAvatar(cat: p.cat, size: 44)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(p.cat.name) belongs to \(p.displayName)").font(Theme.font(14, .bold)).lineLimit(2)
+                                Text(friendSent ? "Friend request sent" : "Add them as a friend to visit their lounge")
+                                    .font(Theme.font(12)).foregroundStyle(Theme.muted)
+                            }
+                            Spacer(minLength: 0)
+                            if !friendSent {
+                                Button("Add") {
+                                    Haptics.tap(.medium)
+                                    friendSent = true
+                                    Task { _ = try? await online.requestFriend(p.userID) }
+                                }
+                                .font(Theme.font(14, .bold)).foregroundStyle(.white)
+                                .padding(.horizontal, 16).frame(height: 38)
+                                .background(Capsule().fill(Theme.rose))
+                            }
+                            PlayerSafetyMenu(playerID: p.userID, name: p.displayName, context: .friends)
+                        }
+                    }
+                }
                 Button("Back to arena", action: done).buttonStyle(PrimaryButtonStyle())
             }
             .padding(20)
@@ -543,6 +637,87 @@ struct BattleResultView: View {
                 withAnimation(.easeInOut(duration: 0.5).repeatCount(3, autoreverses: true).delay(0.6)) { showEvolve = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.3) { withAnimation { showEvolve = false } }
             }
+        }
+    }
+}
+
+
+// MARK: - Defender
+
+/// Pick which of your cats waits in the arena for other players.
+struct DefenderPicker: View {
+    @Environment(GameStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var saving: UUID?
+    @State private var failed = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Your defender stays in the arena while you're away. Other players fight it, and every time it wins you earn 10 coins (up to 150 a day). You still keep all your cats.")
+                        .font(Theme.font(14)).foregroundStyle(Theme.muted)
+                    ForEach(store.cats.sorted { $0.level > $1.level }) { cat in
+                        let current = store.online?.myDefender?.cat.id == cat.id
+                        Button {
+                            choose(cat)
+                        } label: {
+                            HStack(spacing: 12) {
+                                CatSprite(cat: cat, size: 56, animated: false)
+                                    .frame(width: 64, height: 64)
+                                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.beige))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(cat.name).font(Theme.font(16, .heavy))
+                                    Text("Lv \(cat.level) · \(cat.kind.title) · \(cat.wins) wins").font(Theme.font(12)).foregroundStyle(Theme.muted)
+                                }
+                                Spacer(minLength: 0)
+                                if saving == cat.id {
+                                    ProgressView()
+                                } else if current {
+                                    Tag(text: "Defending", color: Theme.rose, filled: true)
+                                }
+                            }
+                            .padding(10)
+                            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white))
+                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(current ? Theme.rose : .clear, lineWidth: 2))
+                        }
+                        .buttonStyle(PressableStyle())
+                        .foregroundStyle(Theme.text)
+                        .disabled(saving != nil)
+                    }
+                    if store.online?.myDefender != nil {
+                        Button("Take my cat out of the arena") {
+                            Task { await store.online?.clearDefender(); dismiss() }
+                        }
+                        .font(Theme.font(14, .semibold)).foregroundStyle(Theme.muted).frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    if failed {
+                        Text("Couldn't reach the arena. Try again in a moment.").font(Theme.font(13, .semibold)).foregroundStyle(Theme.rose)
+                    }
+                }
+                .padding(20)
+            }
+            .background(Theme.cream.ignoresSafeArea())
+            .navigationTitle("Choose a defender")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private func choose(_ cat: Cat) {
+        guard let online = store.online else { return }
+        saving = cat.id
+        failed = false
+        Task {
+            do {
+                try await online.setDefender(cat)
+                Haptics.success()
+                store.toast("\(cat.name) is guarding the arena! 🛡️")
+                dismiss()
+            } catch {
+                failed = true
+                Haptics.warning()
+            }
+            saving = nil
         }
     }
 }

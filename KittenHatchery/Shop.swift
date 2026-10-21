@@ -222,6 +222,7 @@ struct ShopItemSheet: View {
                             Tag(text: bought || store.owned(kind) > 0 ? "You own this" : "Preview · not bought yet", color: Theme.text)
                                 .background(Capsule().fill(.white)).padding(10)
                         }
+                        .overlay { if bought { ConfettiView(count: 36) } }
                 } else {
                     FurnitureView(kind: kind, scale: min(1.9, 200 / max(kind.size.width, kind.size.height)),
                                   shelfBreeds: Breed.allCases.reversed().filter { store.discovered.contains($0) },
@@ -403,6 +404,7 @@ struct DecorateView: View {
                          editing: true, selectedItem: selected,
                          onSelectItem: { id in Haptics.tap(); selected = id },
                          onMoveItem: { id, x, y in store.moveItem(id, x: x, y: y) },
+                         onResizeItem: { id, scale in store.resizeItem(id, to: scale) },
                          room: r)
             }
                 .overlay(alignment: .bottomTrailing) {
@@ -429,15 +431,21 @@ struct DecorateView: View {
                 }
             if let t = tryOn {
                 tryOnBar(t)
-            } else if let item = selectedItem, item.kind.tintable {
-                HStack {
-                    Text(item.kind.title).font(Theme.font(13, .bold))
-                    Spacer()
-                    TintPicker(selected: item.tint ?? .rose) { store.setTint(item.id, $0) }
-                        .scaleEffect(0.85, anchor: .trailing)
+            } else if let item = selectedItem, item.kind.tintable || item.kind.resizable {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text(item.kind.title).font(Theme.font(13, .bold)).lineLimit(1)
+                        Spacer(minLength: 0)
+                        if item.kind.resizable { sizeStepper(item) }
+                    }
+                    if item.kind.tintable {
+                        TintPicker(selected: item.tint ?? .rose) { store.setTint(item.id, $0) }
+                            .scaleEffect(0.85, anchor: .leading)
+                            .frame(height: 38, alignment: .leading)
+                    }
                 }
             } else {
-                Text(note ?? "Drag furniture to move it. Tap to select, then flip, recolour, put it away or carry it to another room.")
+                Text(note ?? "Drag furniture to move it. Tap to select, then resize (or pinch), flip, recolour, put it away or carry it to another room.")
                     .font(Theme.font(13)).foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -652,6 +660,39 @@ struct DecorateView: View {
                 .foregroundStyle(Theme.text)
             }
         }
+    }
+
+    /// Smaller / bigger for the selected piece. Pinching the room does the same.
+    private func sizeStepper(_ item: PlacedItem) -> some View {
+        HStack(spacing: 0) {
+            Button {
+                Haptics.tap()
+                store.resizeItem(item.id, to: item.scale - 0.1)
+            } label: {
+                Image(systemName: "minus").font(.system(size: 14, weight: .bold)).frame(width: 40, height: 36)
+            }
+            .disabled(item.scale <= item.kind.scaleRange.lowerBound)
+            .opacity(item.scale <= item.kind.scaleRange.lowerBound ? 0.3 : 1)
+            .accessibilityLabel("Smaller")
+            Text("\(Int((item.scale * 100).rounded()))%")
+                .font(Theme.font(13, .heavy)).monospacedDigit()
+                .contentTransition(.numericText())
+                .frame(minWidth: 46)
+                .animation(.snappy, value: item.scale)
+                .accessibilityLabel("Size \(Int((item.scale * 100).rounded())) percent")
+            Button {
+                Haptics.tap()
+                store.resizeItem(item.id, to: item.scale + 0.1)
+            } label: {
+                Image(systemName: "plus").font(.system(size: 14, weight: .bold)).frame(width: 40, height: 36)
+            }
+            .disabled(item.scale >= item.kind.scaleRange.upperBound)
+            .opacity(item.scale >= item.kind.scaleRange.upperBound ? 0.3 : 1)
+            .accessibilityLabel("Bigger")
+        }
+        .foregroundStyle(Theme.text)
+        .background(Capsule().fill(.white))
+        .overlay(Capsule().stroke(Theme.border, lineWidth: 1))
     }
 
     private func roundButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {

@@ -1,18 +1,86 @@
 import SwiftUI
 import AVFoundation
 
+/// What a cat is doing right now, for livelier rooms.
+enum CatAction: Equatable { case idle, walk, stretch, nap }
+
 /// A cat drawn from its breed's Higgsfield art and sized by growth stage.
 struct CatSprite: View {
     let cat: Cat
     var size: CGFloat = 160
     var animated = true
     var mood: Mood = .idle
+    var action: CatAction = .idle
+    /// Bump to make the cat jump (for example when it's petted).
+    var jump = 0
 
     enum Mood { case idle, happy, sleepy }
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var breathe = false
+    @State private var hop = false
+    @State private var tilt: Double = 0
+
+    private var lively: Bool { animated && !reduceMotion }
+    private var shownMood: Mood { action == .nap ? .sleepy : mood }
 
     var body: some View {
+        sprite
+            // Walking: a little bounce and waddle on every step.
+            .offset(y: hop ? -size * 0.05 : 0)
+            .rotationEffect(.degrees(action == .walk && lively ? (hop ? 3 : -3) : tilt), anchor: .bottom)
+            // Stretching: long and low for a moment.
+            .scaleEffect(x: action == .stretch ? 1.14 : 1, y: action == .stretch ? 0.86 : 1, anchor: .bottom)
+            .animation(.spring(response: 0.45, dampingFraction: 0.6), value: action)
+            .keyframeAnimator(initialValue: JumpPose(), trigger: jump) { content, pose in
+                content
+                    .scaleEffect(x: pose.sx, y: pose.sy, anchor: .bottom)
+                    .offset(y: pose.y * size)
+            } keyframes: { _ in
+                KeyframeTrack(\.y) {
+                    CubicKeyframe(0, duration: 0.08)
+                    SpringKeyframe(reduceMotion ? 0 : -0.32, duration: 0.24, spring: .snappy)
+                    CubicKeyframe(0, duration: 0.2)
+                    CubicKeyframe(0, duration: 0.18)
+                }
+                KeyframeTrack(\.sy) {
+                    CubicKeyframe(0.86, duration: 0.08)
+                    CubicKeyframe(1.08, duration: 0.24)
+                    CubicKeyframe(0.9, duration: 0.2)
+                    SpringKeyframe(1, duration: 0.18)
+                }
+                KeyframeTrack(\.sx) {
+                    CubicKeyframe(1.1, duration: 0.08)
+                    CubicKeyframe(0.94, duration: 0.24)
+                    CubicKeyframe(1.08, duration: 0.2)
+                    SpringKeyframe(1, duration: 0.18)
+                }
+            }
+            .onChange(of: action) { _, a in setHop(a == .walk) }
+            .onAppear { setHop(action == .walk) }
+            .task(id: action == .idle && lively) {
+                // Now and then an idle cat looks around.
+                guard action == .idle, lively else { tilt = 0; return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(Double.random(in: 3.5...8)))
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.55)) { tilt = Bool.random() ? 6 : -6 }
+                    try? await Task.sleep(for: .seconds(Double.random(in: 0.8...1.6)))
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) { tilt = 0 }
+                }
+            }
+    }
+
+    private func setHop(_ on: Bool) {
+        guard lively else { hop = false; return }
+        if on {
+            withAnimation(.easeInOut(duration: 0.2).repeatForever(autoreverses: true)) { hop = true }
+        } else {
+            withAnimation(.easeOut(duration: 0.15)) { hop = false }
+        }
+    }
+
+    private var sprite: some View {
         Image(cat.kind.imageName)
             .resizable()
             .scaledToFit()
@@ -22,14 +90,14 @@ struct CatSprite: View {
             .frame(width: size, height: size)
             .scaleEffect(cat.stage.scale)
             .scaleEffect(x: 1, y: breathe ? 1.035 : 1, anchor: .bottom)
-            .offset(y: mood == .happy && breathe ? -10 : 0)
-            .rotationEffect(.degrees(mood == .sleepy ? -12 : 0), anchor: .bottom)
+            .offset(y: shownMood == .happy && breathe ? -10 : 0)
+            .rotationEffect(.degrees(shownMood == .sleepy ? -12 : 0), anchor: .bottom)
             .shadow(color: glow, radius: cat.stage == .legend ? 18 : 10)
             .overlay {
                 if cat.rarity == .legendary && animated { Sparkles(size: size) }
             }
             .overlay(alignment: .topTrailing) {
-                if mood == .sleepy {
+                if shownMood == .sleepy {
                     Text("z z z").font(Theme.font(size * 0.12, .heavy)).foregroundStyle(Theme.muted)
                         .offset(x: -size * 0.05, y: size * 0.05)
                 }
@@ -39,6 +107,12 @@ struct CatSprite: View {
                 let speed = mood == .happy ? 0.35 : (mood == .sleepy ? 1.8 : 1.3)
                 withAnimation(.easeInOut(duration: speed).repeatForever(autoreverses: true)) { breathe = true }
             }
+    }
+
+    private struct JumpPose {
+        var y: CGFloat = 0
+        var sx: CGFloat = 1
+        var sy: CGFloat = 1
     }
 
     private var glow: Color {

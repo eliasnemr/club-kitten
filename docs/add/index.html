@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Join me in Club Kitten</title>
+<meta name="description" content="You've been invited to be friends in Club Kitten. Open the app to accept.">
+<meta property="og:title" content="Join me in Club Kitten 🐾">
+<meta property="og:description" content="Tap to become friends, visit each other's lounges and go on playdates.">
+<meta property="og:image" content="https://eliasnemr.github.io/club-kitten/assets/shots/03-lounge.jpg">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#F6F2EF">
+<link rel="icon" href="../assets/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root { --cream: #F6F2EF; --beige: #EFE6DF; --text: #2B2124; --muted: #7A6C70; --border: #E7DCD5; --rose: #DA2F52; --rose-dark: #B8203F; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--cream); color: var(--text); font-family: "Nunito", ui-rounded, system-ui, sans-serif; display: grid; place-items: center; padding: 24px 16px; }
+  .card { width: min(420px, 100%); background: #fff; border-radius: 32px; padding: 32px 24px 28px; text-align: center; box-shadow: 0 24px 60px -30px rgba(90, 40, 50, .35); }
+  .cats { display: flex; justify-content: center; margin-bottom: 8px; }
+  .cats img { width: 92px; margin: 0 -12px; filter: drop-shadow(0 8px 12px rgba(60, 20, 30, .15)); }
+  h1 { font-size: 30px; font-weight: 900; line-height: 1.1; margin: 8px 0 10px; }
+  p { color: var(--muted); font-size: 16px; margin: 0 0 22px; line-height: 1.5; }
+  .code { display: inline-block; font-weight: 900; letter-spacing: 2px; font-size: 20px; background: var(--beige); border-radius: 12px; padding: 8px 16px; margin-bottom: 22px; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 54px; border-radius: 999px; font-weight: 800; font-size: 17px; text-decoration: none; margin-top: 10px; }
+  .primary { background: var(--rose); color: #fff; }
+  .primary:hover { background: var(--rose-dark); }
+  .secondary { border: 1.5px solid var(--border); color: var(--text); }
+  small { display: block; margin-top: 18px; color: var(--muted); font-size: 13px; }
+  .bad { color: var(--rose); font-weight: 700; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="cats">
+      <img src="../assets/cats/scottishFold.png" alt="">
+      <img src="../assets/cats/cream.png" alt="">
+      <img src="../assets/cats/britishShorthair.png" alt="">
+    </div>
+    <h1 id="title">You're invited to Club Kitten!</h1>
+    <p id="lede">Your friend wants to hang out. Open Club Kitten to become friends, visit each other's lounges and go on playdates.</p>
+    <div class="code" id="code" hidden></div>
+    <a class="btn primary" id="open" href="#">Open in Club Kitten</a>
+    <a class="btn secondary" id="get" href="../#download">Get Club Kitten</a>
+    <small id="hint">Don't have the app yet? Get it, then come back and tap this link again.</small>
+  </main>
+<script>
+  // Swap for the App Store link once Club Kitten is live (same as APP_STORE_URL on the home page).
+  const APP_STORE_URL = "";
+
+  const raw = (new URLSearchParams(location.search).get("code") || "").toUpperCase();
+  const valid = /^KIT-[0-9A-F]{6}$/.test(raw);
+  const openLink = document.getElementById("open");
+  if (APP_STORE_URL) document.getElementById("get").href = APP_STORE_URL;
+
+  if (valid) {
+    const appURL = "clubkitten://add?code=" + encodeURIComponent(raw);
+    const codeEl = document.getElementById("code");
+    codeEl.textContent = raw;
+    codeEl.hidden = false;
+    openLink.href = appURL;
+    // Try the app straight away; if it isn't installed, the page simply stays here.
+    setTimeout(() => { location.href = appURL; }, 400);
+  } else {
+    document.getElementById("title").textContent = "This invite link isn't complete";
+    document.getElementById("lede").innerHTML = '<span class="bad">The friend code is missing.</span> Ask your friend to share their invite again from Friends in Club Kitten.';
+    openLink.hidden = true;
+    document.getElementById("hint").hidden = true;
+  }
+</script>
+</body>
+</html>

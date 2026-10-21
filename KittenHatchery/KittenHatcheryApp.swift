@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct KittenHatcheryApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var store = GameStore()
 
     var body: some Scene {
@@ -16,6 +17,8 @@ struct KittenHatcheryApp: App {
 struct RootView: View {
     @Environment(GameStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
+    /// A playdate invite you said yes to from the banner.
+    @State private var joining: PlaydateRequest?
     private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -23,9 +26,9 @@ struct RootView: View {
         TabView(selection: $store.tab) {
             DenView().tabItem { Label("Den", systemImage: "house.fill") }.tag(Tab.den)
             HatcheryView().tabItem { Label("Eggs", systemImage: "oval.portrait.fill") }.tag(Tab.eggs)
+            PlayView().tabItem { Label("Play", systemImage: "gamecontroller.fill") }.tag(Tab.play)
             CollectionView().tabItem { Label("Cats", systemImage: "square.grid.2x2.fill") }.tag(Tab.cats)
             LoungeView().tabItem { Label("Lounge", systemImage: "sofa.fill") }.tag(Tab.lounge)
-            PlayView().tabItem { Label("Play", systemImage: "gamecontroller.fill") }.tag(Tab.play)
         }
         .tint(Theme.rose)
         #if DEBUG
@@ -33,10 +36,48 @@ struct RootView: View {
         .overlay(alignment: .top) { DevBadge().padding(.top, 2) }
         #endif
         .onReceive(clock) { _ in store.tick() }
-        .task { await store.online?.start() }
+        .task {
+            PushCenter.shared.start(store: store)
+            await store.online?.start()
+            PushCenter.shared.uploadToken()
+        }
+        // Invites reach you on every screen, including while visiting a friend.
+        .overlay(alignment: .top) {
+            InviteBanner { joining = $0 }
+        }
+        .overlay(alignment: .bottom) {
+            if let text = store.toastMessage {
+                Text(text)
+                    .font(Theme.font(14, .bold)).foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 18).padding(.vertical, 12)
+                    .background(Capsule().fill(Theme.text.opacity(0.92)))
+                    .padding(.horizontal, 24).padding(.bottom, 118)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .allowsHitTesting(false)
+                    .accessibilityAddTraits(.updatesFrequently)
+            }
+        }
+        // Invite links: clubkitten://add?code=KIT-XXXXXX (or the web page that opens it).
+        .onOpenURL { url in
+            guard let code = InviteLink.code(from: url) else { return }
+            store.tab = .lounge
+            Task { await store.online?.redeemInvite(code) }
+        }
         .onChange(of: scenePhase) { _, phase in
-            // Send the latest save before the app is suspended.
-            if phase == .background { store.online?.flushSave() }
+            switch phase {
+            case .background:
+                // Send the latest save and lounge before the app is suspended.
+                store.online?.flushSave()
+                store.online?.pushProfile(now: true)
+            case .active:
+                Task { await store.online?.becameActive() }
+            default:
+                break
+            }
+        }
+        .fullScreenCover(item: $joining) { r in
+            if let cat = store.activeCat { OnlinePlaydateView(friend: r.friend, myCat: cat, invite: r.invite) }
         }
         #if DEBUG
         .onAppear { applyDebugArguments() }
@@ -107,9 +148,52 @@ struct EnergyPill: View {
 
 struct CoinPill: View {
     @Environment(GameStore.self) private var store
+    @State private var gains: [CoinGain] = []
+    @State private var bump = 0
+
+    struct CoinGain: Identifiable { let id = UUID(); let amount: Int }
+
     var body: some View {
         Pill(icon: "pawprint.circle.fill", text: "\(store.coins)", tint: Theme.warning)
+            .animation(.snappy, value: store.coins)
+            .keyframeAnimator(initialValue: 1.0, trigger: bump) { content, s in
+                content.scaleEffect(s)
+            } keyframes: { _ in
+                SpringKeyframe(1.18, duration: 0.15)
+                SpringKeyframe(1, duration: 0.3, spring: .bouncy)
+            }
+            // "+25" floats up from the pill whenever coins come in.
+            .overlay(alignment: .top) {
+                ZStack {
+                    ForEach(gains) { g in CoinGainLabel(amount: g.amount) }
+                }
+                .allowsHitTesting(false)
+            }
+            .onChange(of: store.coins) { old, new in
+                guard new > old else { return }
+                bump += 1
+                let gain = CoinGain(amount: new - old)
+                gains.append(gain)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1.3))
+                    gains.removeAll { $0.id == gain.id }
+                }
+            }
             .accessibilityLabel("\(store.coins) coins")
+    }
+}
+
+private struct CoinGainLabel: View {
+    let amount: Int
+    @State private var up = false
+
+    var body: some View {
+        Text("+\(amount)")
+            .font(Theme.font(15, .heavy)).foregroundStyle(Theme.warning)
+            .shadow(color: .white, radius: 2)
+            .offset(y: up ? 34 : 6)
+            .opacity(up ? 0 : 1)
+            .onAppear { withAnimation(.easeOut(duration: 1.1)) { up = true } }
     }
 }
 

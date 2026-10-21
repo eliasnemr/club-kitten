@@ -41,8 +41,8 @@ struct PrimaryButtonStyle: ButtonStyle {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, minHeight: 54)
             .background(Capsule().fill(isEnabled ? (configuration.isPressed ? Theme.roseDeep : fill) : Theme.muted.opacity(0.45)))
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.55), value: configuration.isPressed)
     }
 }
 
@@ -56,16 +56,16 @@ struct SecondaryButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity, minHeight: 54)
             .background(Capsule().fill(configuration.isPressed ? Theme.beige : .white))
             .overlay(Capsule().stroke(Theme.border, lineWidth: 1))
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.55), value: configuration.isPressed)
     }
 }
 
 struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.55), value: configuration.isPressed)
     }
 }
 
@@ -81,6 +81,52 @@ struct Card<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white))
             .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
+            .modifier(Entrance())
+    }
+}
+
+/// Fades and rises content in the first time it appears.
+struct Entrance: ViewModifier {
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown || reduceMotion ? 0 : 14)
+            .onAppear {
+                guard !shown else { return }
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { shown = true }
+            }
+    }
+}
+
+/// A burst of stars behind a "Level up!" badge.
+struct LevelUpBurst: View {
+    let text: String
+    @State private var go = false
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<10, id: \.self) { i in
+                Image(systemName: "star.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(i.isMultiple(of: 2) ? Theme.warning : Theme.rose)
+                    .offset(y: go ? -46 : -6)
+                    .rotationEffect(.degrees(Double(i) * 36))
+                    .opacity(go ? 0 : 1)
+                    .scaleEffect(go ? 1.2 : 0.4)
+            }
+            Label(text, systemImage: "arrow.up.circle.fill")
+                .font(Theme.font(14, .heavy)).foregroundStyle(.white)
+                .padding(.horizontal, 14).frame(height: 34)
+                .background(Capsule().fill(Theme.rose))
+                .scaleEffect(go ? 1 : 0.6)
+        }
+        .onAppear {
+            Haptics.success()
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.55)) { go = true }
+        }
     }
 }
 
@@ -93,6 +139,7 @@ struct Pill: View {
         HStack(spacing: 6) {
             Image(systemName: icon).font(.system(size: 13, weight: .bold))
             Text(text).font(Theme.font(14, .bold)).monospacedDigit()
+                .contentTransition(.numericText())
         }
         .foregroundStyle(tint)
         .padding(.horizontal, 12)

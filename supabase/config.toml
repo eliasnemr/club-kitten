@@ -19,3 +19,7 @@ enable_anonymous_sign_ins = true
 
 [functions.link-game-center]
 verify_jwt = true
+
+# Called by the database with a shared secret, not by signed-in players.
+[functions.notify]
+verify_jwt = false

@@ -30,6 +30,17 @@ enum ChallengeKind: String, Codable, CaseIterable {
     /// Challenges that need a friend to visit or have a playdate with.
     var needsFriends: Bool { self == .visitFriend || self == .playdate }
 
+    /// Takes you to where the challenge can be done.
+    @MainActor func go(_ store: GameStore) {
+        store.tab = tab
+        switch self {
+        case .winBattles: store.showArena = true
+        case .shop: store.loungeRoute = .shop
+        case .visitFriend, .playdate: store.loungeRoute = .friends
+        default: break
+        }
+    }
+
     /// Where the "Go" button takes you.
     var tab: Tab {
         switch self {
@@ -40,6 +51,8 @@ enum ChallengeKind: String, Codable, CaseIterable {
         }
     }
 }
+
+enum LoungeRoute { case shop, friends }
 
 struct DailyChallenge: Codable, Identifiable, Equatable {
     var id = UUID()
@@ -109,6 +122,9 @@ struct SeededRandom {
 struct ChallengesCard: View {
     @Environment(GameStore.self) private var store
     var compact = false
+    /// Lets the screen showing the card handle Go itself (Play scrolls to its own minigames).
+    /// Return true when handled.
+    var onGo: ((ChallengeKind) -> Bool)? = nil
 
     var body: some View {
         let list = store.challenges
@@ -167,7 +183,10 @@ struct ChallengesCard: View {
                 }
                 .accessibilityLabel("Claim \(c.reward) coins")
             } else {
-                Button("Go") { store.tab = c.kind.tab; if c.kind == .winBattles { store.showArena = true } }
+                Button("Go") {
+                    Haptics.tap()
+                    if onGo?(c.kind) != true { c.kind.go(store) }
+                }
                     .font(Theme.font(13, .bold)).foregroundStyle(Theme.rose)
                     .padding(.horizontal, 14).frame(height: 36)
                     .overlay(Capsule().stroke(Theme.rose, lineWidth: 1.5))
