@@ -298,6 +298,17 @@ struct OnlinePlaydateView: View {
             channel = ch
             await ch.subscribe()
             if let current = await online.playdate(id) { apply(current) }
+            // Live updates are the fast path; this check every few seconds makes sure a missed
+            // update can never leave either player stuck on the waiting screen.
+            let poll = Task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(3))
+                    guard !Task.isCancelled, phase == .waiting || phase == .connecting || phase == .live,
+                          let current = await online.playdate(id) else { continue }
+                    if current.status != pd?.status || current.bond != pd?.bond { apply(current) }
+                }
+            }
+            defer { poll.cancel() }
             for await row in updates { apply(row) }
         } catch {
             phase = .failed(Self.message(error))

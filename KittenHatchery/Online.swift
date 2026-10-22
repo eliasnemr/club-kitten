@@ -279,6 +279,8 @@ extension JSONDecoder {
             let raw = try decoder.singleValueContainer().decode(String.self)
             var text = raw.replacingOccurrences(of: " ", with: "T")
             if let r = text.range(of: #"[+-]\d{2}$"#, options: .regularExpression) { text.replaceSubrange(r, with: text[r] + ":00") }
+            // Dates saved inside cats (jsonb) have no time zone; the client writes them in UTC.
+            if text.range(of: #"(Z|[+-]\d{2}:?\d{2})$"#, options: .regularExpression) == nil { text += "Z" }
             let withFraction = ISO8601DateFormatter()
             withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             if let date = withFraction.date(from: text) ?? ISO8601DateFormatter().date(from: text) { return date }
@@ -930,7 +932,13 @@ final class OnlineService {
         let stream = AsyncStream<RemotePlaydate> { cont in
             let task = Task {
                 for await u in updates {
-                    if let pd = try? u.decodeRecord(as: RemotePlaydate.self, decoder: .realtimeRows) { cont.yield(pd) }
+                    do {
+                        cont.yield(try u.decodeRecord(as: RemotePlaydate.self, decoder: .realtimeRows))
+                    } catch {
+                        #if DEBUG
+                        print("[playdate] couldn't read update: \(error)")
+                        #endif
+                    }
                 }
                 cont.finish()
             }
