@@ -147,62 +147,6 @@ private struct FlyingFish: View {
     }
 }
 
-// MARK: - Laser dot (HP / stamina)
-
-struct LaserDotGame: View {
-    @Binding var score: Int
-    let start: Date
-    @State private var finger: CGPoint?
-    @State private var size: CGSize = .zero
-    @State private var onDot = false
-
-    private func dot(at date: Date, in s: CGSize) -> CGPoint {
-        let t = date.timeIntervalSince(start)
-        let k = 1 + t * 0.05
-        let x = 0.5 + 0.4 * sin(t * 1.3 * k)
-        let y = 0.5 + 0.4 * sin(t * 1.9 * k + 1.2)
-        return CGPoint(x: x * s.width, y: y * s.height)
-    }
-
-    var body: some View {
-        GeometryReader { geo in
-            TimelineView(.animation) { ctx in
-                let d = dot(at: ctx.date, in: geo.size)
-                ZStack {
-                    Color.clear.contentShape(Rectangle())
-                    Circle().fill(Color.red.opacity(0.25)).frame(width: 70, height: 70).position(d)
-                    Circle().fill(Color.red).frame(width: 22, height: 22).shadow(color: .red, radius: 10).position(d)
-                    if let finger {
-                        Image(systemName: "pawprint.fill").font(.system(size: 34))
-                            .foregroundStyle(onDot ? Theme.success : Theme.text.opacity(0.6))
-                            .position(finger)
-                    } else {
-                        Text("Touch and hold on the dot").font(Theme.font(15, .semibold)).foregroundStyle(Theme.muted)
-                    }
-                }
-            }
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { finger = $0.location }
-                .onEnded { _ in finger = nil })
-            .onAppear { size = geo.size }
-            .onChange(of: geo.size) { _, s in size = s }
-        }
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(100))
-                guard let f = finger, size != .zero else { onDot = false; continue }
-                let d = dot(at: Date(), in: size)
-                let hit = hypot(f.x - d.x, f.y - d.y) < 42
-                if hit {
-                    score += 1
-                    if score.isMultiple(of: 5) { Haptics.tap(.soft) }
-                }
-                onDot = hit
-            }
-        }
-    }
-}
-
 // MARK: - Purr rhythm (Charm)
 
 struct PurrRhythmGame: View {

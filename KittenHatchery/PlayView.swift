@@ -1,43 +1,43 @@
 import SwiftUI
 
 enum Minigame: String, CaseIterable, Identifiable {
-    case yarn, fish, laser, purr, match
+    case yarn, fish, purr, match, pond
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .yarn: "Yarn chase"
         case .fish: "Fish toss"
-        case .laser: "Laser dot"
         case .purr: "Purr rhythm"
         case .match: "Kitty match"
+        case .pond: "Pond fishing"
         }
     }
     var blurb: String {
         switch self {
         case .yarn: "Tap the rolling yarn before it escapes"
         case .fish: "Stop the meter in the sweet spot to fling fish"
-        case .laser: "Keep your finger on the dot as it zips around"
         case .purr: "Tap when the ring meets the circle"
-        case .match: "Remember the cats, then find every pair after the shuffle"
+        case .match: "Remember where the cats are, then find every pair"
+        case .pond: "Hold to lower your hook and catch fish. Watch out for old boots!"
         }
     }
     var stat: StatKind {
         switch self {
         case .yarn: .speed
         case .fish: .power
-        case .laser: .hp
         case .purr: .charm
         case .match: .charm
+        case .pond: .hp
         }
     }
     var icon: String {
         switch self {
         case .yarn: "circle.dotted.circle"
         case .fish: "fish.fill"
-        case .laser: "smallcircle.filled.circle"
         case .purr: "music.note"
         case .match: "rectangle.on.rectangle.angled"
+        case .pond: "figure.fishing"
         }
     }
     /// Score needed for each training point.
@@ -45,12 +45,13 @@ enum Minigame: String, CaseIterable, Identifiable {
         switch self {
         case .yarn: 5
         case .fish: 6
-        case .laser: 40
         case .purr: 8
         case .match: 1
+        case .pond: 2
         }
     }
-    var duration: Double { 20 }
+    /// Fishing needs a little longer to reel things in.
+    var duration: Double { self == .pond ? 30 : 20 }
 }
 
 struct PlayView: View {
@@ -252,9 +253,9 @@ struct MinigameContainer: View {
         switch game {
         case .yarn: YarnChaseGame(score: $score)
         case .fish: FishTossGame(score: $score, start: start)
-        case .laser: LaserDotGame(score: $score, start: start)
         case .purr: PurrRhythmGame(score: $score, start: start)
         case .match: EmptyView()   // shown directly by the container, with its own timer
+        case .pond: PondFishingGame(score: $score, start: start, cat: cat)
         }
     }
 
@@ -318,7 +319,11 @@ struct MinigameContainer: View {
         let mult = MatchLevel(level: m.level).multiplier
         let points = min(10, m.found + (m.cleared ? m.level : 0))
         let xp = Int(Double(15 + m.found * 6) * mult) + (m.cleared ? 10 * m.level : 0)
-        let coins = Int(Double(8 + m.found * 4) * mult) + (m.cleared ? m.secondsLeft / 2 + 5 * m.level : 0)
+        // Coins are kept small: up to 10 for the pairs you find, plus up to 10 more for clearing
+        // the board quickly. Never more than 20.
+        let pairCoins = Int((Double(m.found) / Double(max(m.pairs, 1)) * 10).rounded())
+        let speedCoins = m.cleared ? Int((Double(m.secondsLeft) / MatchLevel(level: m.level).time * 10).rounded()) : 0
+        let coins = min(20, pairCoins + speedCoins)
         store.updateCat(cat.id) { $0.add(game.stat, points * game.stat.step) }
         store.record(.playGames)
         store.record(.highScore, amount: m.score)

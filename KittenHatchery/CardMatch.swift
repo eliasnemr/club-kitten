@@ -7,7 +7,7 @@ struct MatchLevel {
     let level: Int
     var pairs: Int { [3, 4, 6, 8, 10][min(level, 5) - 1] }
     var columns: Int { pairs <= 3 ? 3 : 4 }
-    /// Seconds to memorise the cards before they flip and shuffle.
+    /// Seconds to memorise the cards before they flip face down.
     /// Bigger boards get a little longer; past level 5 it shrinks again.
     var preview: Double { max(2.5, 2.0 + Double(pairs) * 0.22 - Double(max(0, level - 5)) * 0.25) }
     /// Seconds to find every pair.
@@ -42,9 +42,8 @@ struct CardMatchGame: View {
         var matched = false
     }
 
-    private enum Stage: Equatable { case preview, shuffling, playing, over }
+    private enum Stage: Equatable { case preview, playing, over }
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var cards: [Card] = []
     @State private var stage: Stage = .preview
     @State private var faceUp: Set<UUID> = []
@@ -94,9 +93,6 @@ struct CardMatchGame: View {
                 StatBar(label: String(format: "%.0fs", left.rounded(.up)), value: left, max: level.preview, color: Theme.warning)
                     .padding(.horizontal, 16)
             }
-        case .shuffling:
-            Text("Shuffling…").font(Theme.font(18, .heavy)).padding(.top, 14)
-            Color.clear.frame(height: 9)
         case .playing, .over:
             HStack {
                 Text("Level \(level.level) · \(cards.filter(\.matched).count / 2)/\(level.pairs) pairs")
@@ -123,16 +119,10 @@ struct CardMatchGame: View {
         faceUp = Set(cards.map(\.id))
         try? await Task.sleep(for: .seconds(level.preview))
         guard !Task.isCancelled else { return }
-        // Flip them all down, then shuffle a few times so the player can't just remember spots.
-        withAnimation(.easeInOut(duration: 0.3)) { faceUp = []; stage = .shuffling }
+        // Flip them all face down in place: now find the pairs from memory.
+        withAnimation(.easeInOut(duration: 0.3)) { faceUp = [] }
         Haptics.tap(.medium)
-        try? await Task.sleep(for: .milliseconds(400))
-        let moves = reduceMotion ? 1 : 3 + min(level.level, 4)
-        for _ in 0..<moves {
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) { cards.shuffle() }
-            Haptics.tap(.light)
-            try? await Task.sleep(for: .milliseconds(reduceMotion ? 200 : 380))
-        }
+        try? await Task.sleep(for: .milliseconds(350))
         start = Date()
         stage = .playing
         #if DEBUG
