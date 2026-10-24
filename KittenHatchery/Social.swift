@@ -19,12 +19,17 @@ enum Furniture: String, Codable, CaseIterable, Identifiable {
     case catBed, sofa, painting, fairyLights, bookshelf
     // Illustrated with Higgsfield.
     case boxCastle, throne, fireplace, beanBag, monstera, pawClock
+    /// Unlocked once you raise a cat to level 20.
+    case goshaPortrait
     var id: String { rawValue }
+
+    /// The cat level you need before you can buy this piece, if any.
+    var requiredLevel: Int? { self == .goshaPortrait ? 20 : nil }
 
     /// Asset-catalog image for Higgsfield-illustrated pieces; nil means the item is drawn in code.
     var imageAsset: String? {
         switch self {
-        case .boxCastle, .throne, .fireplace, .beanBag, .monstera, .pawClock: "Furniture-\(rawValue)"
+        case .boxCastle, .throne, .fireplace, .beanBag, .monstera, .pawClock, .goshaPortrait: "Furniture-\(rawValue)"
         default: nil
         }
     }
@@ -53,6 +58,7 @@ enum Furniture: String, Codable, CaseIterable, Identifiable {
         case .beanBag: "Bean bag"
         case .monstera: "Monstera"
         case .pawClock: "Paw clock"
+        case .goshaPortrait: "Gosha's portrait"
         }
     }
     var blurb: String {
@@ -79,6 +85,7 @@ enum Furniture: String, Codable, CaseIterable, Identifiable {
         case .beanBag: "Squishy, mint and covered in paw prints."
         case .monstera: "Big leafy shade for sunny naps."
         case .pawClock: "Tells the time in toe beans."
+        case .goshaPortrait: "A grand oil portrait of Gosha, the most distinguished British Shorthair. Only for keepers who've raised a cat to level 20."
         }
     }
     var price: Int {
@@ -97,17 +104,18 @@ enum Furniture: String, Codable, CaseIterable, Identifiable {
         case .window: 200
         case .monstera: 70
         case .pawClock: 80
+        case .goshaPortrait: 1500
         case .beanBag: 90
         case .boxCastle: 110
         case .fireplace: 220
         case .throne: 250
         }
     }
-    var tier: String { price <= 60 ? "Basic" : (price <= 120 ? "Cozy" : "Deluxe") }
+    var tier: String { price <= 60 ? "Basic" : (price <= 120 ? "Cozy" : (price < 1000 ? "Deluxe" : "Legendary")) }
     var category: DecorCategory {
         switch self {
         case .yarnBasket, .scratchPost, .hammock, .boxCastle: .toys
-        case .window, .breedShelf, .painting, .fairyLights, .pawClock: .wallDecor
+        case .window, .breedShelf, .painting, .fairyLights, .pawClock, .goshaPortrait: .wallDecor
         default: .furniture
         }
     }
@@ -119,7 +127,7 @@ enum Furniture: String, Codable, CaseIterable, Identifiable {
     var scaleRange: ClosedRange<Double> {
         switch self {
         case .window: 1...1
-        case .fairyLights, .breedShelf, .painting, .pawClock: 0.75...1.3
+        case .fairyLights, .breedShelf, .painting, .pawClock, .goshaPortrait: 0.75...1.3
         default: 0.6...1.6
         }
     }
@@ -164,6 +172,7 @@ enum Furniture: String, Codable, CaseIterable, Identifiable {
         case .beanBag: CGSize(width: 96, height: 80)
         case .monstera: CGSize(width: 84, height: 100)
         case .pawClock: CGSize(width: 50, height: 68)
+        case .goshaPortrait: CGSize(width: 62, height: 79)
         }
     }
 }

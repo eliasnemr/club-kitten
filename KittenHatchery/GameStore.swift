@@ -27,6 +27,8 @@ struct SaveData: Codable {
     var saveVersion = 0
     /// Duplicate kittens sent to the Kitty Hotel.
     var hotelGuests = 0
+    /// Kitty match difficulty: goes up by one with every cleared board.
+    var matchLevel = 1
 
     init() {}
 
@@ -62,6 +64,7 @@ struct SaveData: Codable {
         lastBonusDay = try c.decodeIfPresent(String.self, forKey: .lastBonusDay) ?? ""
         saveVersion = try c.decodeIfPresent(Int.self, forKey: .saveVersion) ?? 0
         hotelGuests = try c.decodeIfPresent(Int.self, forKey: .hotelGuests) ?? 0
+        matchLevel = max(1, try c.decodeIfPresent(Int.self, forKey: .matchLevel) ?? 1)
     }
 }
 
@@ -368,6 +371,12 @@ final class GameStore {
 
     static func hotelReward(_ rarity: Rarity) -> Int { [20, 40, 80, 150][rarity.index] }
     var hotelGuests: Int { data.hotelGuests }
+    var matchLevel: Int { data.matchLevel }
+
+    func setMatchLevel(_ level: Int) {
+        data.matchLevel = max(1, level)
+        save()
+    }
 
     /// A duplicate kitten moves into the Kitty Hotel, which thanks you with coins.
     func sendToHotel(_ cat: Cat) {
@@ -405,7 +414,7 @@ final class GameStore {
     /// Two items are 30% off each day.
     var dailyDeals: [Furniture] {
         var rng = SeededRandom(seed: ChallengeBook.stableSeed("deals-" + ChallengeBook.dayKey()))
-        var pool = Furniture.allCases
+        var pool = Furniture.allCases.filter { $0.requiredLevel == nil }   // special pieces never go on sale
         var out: [Furniture] = []
         while out.count < 2 { out.append(pool.remove(at: Int(rng.next() % UInt64(pool.count)))) }
         return out
@@ -421,8 +430,14 @@ final class GameStore {
 
     /// Buys an item into lounge storage. Each item can be owned once.
     /// Returns false without enough coins or if you already own it.
+    /// Whether you meet a piece's requirement (for example, Gosha's portrait needs a level-20 cat).
+    func canBuy(_ kind: Furniture) -> Bool {
+        guard let level = kind.requiredLevel else { return true }
+        return data.cats.contains { $0.level >= level }
+    }
+
     func buy(_ kind: Furniture) -> Bool {
-        guard owned(kind) == 0, spendCoins(price(kind)) else { return false }
+        guard owned(kind) == 0, canBuy(kind), spendCoins(price(kind)) else { return false }
         data.lounge.stored.append(kind)
         record(.shop)
         save()

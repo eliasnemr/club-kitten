@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum Minigame: String, CaseIterable, Identifiable {
-    case yarn, fish, laser, purr
+    case yarn, fish, laser, purr, match
     var id: String { rawValue }
 
     var title: String {
@@ -10,6 +10,7 @@ enum Minigame: String, CaseIterable, Identifiable {
         case .fish: "Fish toss"
         case .laser: "Laser dot"
         case .purr: "Purr rhythm"
+        case .match: "Kitty match"
         }
     }
     var blurb: String {
@@ -18,6 +19,7 @@ enum Minigame: String, CaseIterable, Identifiable {
         case .fish: "Stop the meter in the sweet spot to fling fish"
         case .laser: "Keep your finger on the dot as it zips around"
         case .purr: "Tap when the ring meets the circle"
+        case .match: "Remember the cats, then find every pair after the shuffle"
         }
     }
     var stat: StatKind {
@@ -26,6 +28,7 @@ enum Minigame: String, CaseIterable, Identifiable {
         case .fish: .power
         case .laser: .hp
         case .purr: .charm
+        case .match: .charm
         }
     }
     var icon: String {
@@ -34,6 +37,7 @@ enum Minigame: String, CaseIterable, Identifiable {
         case .fish: "fish.fill"
         case .laser: "smallcircle.filled.circle"
         case .purr: "music.note"
+        case .match: "rectangle.on.rectangle.angled"
         }
     }
     /// Score needed for each training point.
@@ -43,6 +47,7 @@ enum Minigame: String, CaseIterable, Identifiable {
         case .fish: 6
         case .laser: 40
         case .purr: 8
+        case .match: 1
         }
     }
     var duration: Double { 20 }
@@ -147,7 +152,10 @@ struct PlayView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(g.title).font(Theme.font(16, .heavy))
                     Text(g.blurb).font(Theme.font(12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-                    Tag(text: "+ \(g.stat.title)", color: Theme.text)
+                    HStack(spacing: 6) {
+                        Tag(text: "+ \(g.stat.title)", color: Theme.text)
+                        if g == .match { Tag(text: "Level \(store.matchLevel)", color: Theme.rose) }
+                    }
                 }
                 Spacer(minLength: 0)
                 Button {
@@ -181,6 +189,8 @@ struct MinigameContainer: View {
     @State private var phase: Phase = .countdown(3)
     @State private var score = 0
     @State private var result: (points: Int, xp: Int, coins: Int, egg: Rarity?, report: GrowthReport?)?
+    /// Kitty match only: how the round went.
+    @State private var matchOutcome: MatchOutcome?
 
     var body: some View {
         VStack(spacing: 14) {
@@ -207,6 +217,8 @@ struct MinigameContainer: View {
                         Text("\(n)").font(Theme.font(64, .heavy)).foregroundStyle(Theme.rose)
                             .id(n).transition(.scale.combined(with: .opacity))
                     }
+                case .playing where game == .match:
+                    CardMatchGame(level: MatchLevel(level: store.matchLevel), score: $score) { finishMatch($0) }
                 case .playing(let start):
                     VStack(spacing: 0) {
                         TimelineView(.periodic(from: start, by: 0.1)) { ctx in
@@ -242,6 +254,7 @@ struct MinigameContainer: View {
         case .fish: FishTossGame(score: $score, start: start)
         case .laser: LaserDotGame(score: $score, start: start)
         case .purr: PurrRhythmGame(score: $score, start: start)
+        case .match: EmptyView()   // shown directly by the container, with its own timer
         }
     }
 
@@ -249,8 +262,14 @@ struct MinigameContainer: View {
         VStack(spacing: 14) {
             CatSprite(cat: store.cats.first { $0.id == cat.id } ?? cat, size: 170, mood: .happy)
             if let r = result {
-                Text(r.points > 0 ? "Great session!" : "Good try!").font(Theme.font(24, .heavy))
+                Text(matchOutcome.map { $0.cleared ? "Board cleared!" : "Time's up!" } ?? (r.points > 0 ? "Great session!" : "Good try!"))
+                    .font(Theme.font(24, .heavy))
                 VStack(spacing: 8) {
+                    if let m = matchOutcome {
+                        rewardRow(icon: "rectangle.on.rectangle.angled",
+                                  text: m.cleared ? "Level \(m.level) cleared · next up: level \(m.level + 1)"
+                                                  : "\(m.found) of \(m.pairs) pairs · try level \(m.level) again")
+                    }
                     rewardRow(icon: game.stat.icon, text: "\(game.stat.title) +\(r.points * game.stat.step)")
                     rewardRow(icon: "star.fill", text: "+\(r.xp) XP")
                     rewardRow(icon: "pawprint.circle.fill", text: "+\(r.coins) coins")
@@ -287,9 +306,35 @@ struct MinigameContainer: View {
         Haptics.tap(.heavy)
         let start = Date()
         phase = .playing(start)
+        // Kitty match has its own preview, shuffle and timer, and reports back when it ends.
+        guard game != .match else { return }
         try? await Task.sleep(for: .seconds(game.duration))
         guard !Task.isCancelled else { return }
         finish()
+    }
+
+    /// Rewards for Kitty match grow with the level, plus a bonus for clearing the board early.
+    private func finishMatch(_ m: MatchOutcome) {
+        let mult = MatchLevel(level: m.level).multiplier
+        let points = min(10, m.found + (m.cleared ? m.level : 0))
+        let xp = Int(Double(15 + m.found * 6) * mult) + (m.cleared ? 10 * m.level : 0)
+        let coins = Int(Double(8 + m.found * 4) * mult) + (m.cleared ? m.secondsLeft / 2 + 5 * m.level : 0)
+        store.updateCat(cat.id) { $0.add(game.stat, points * game.stat.step) }
+        store.record(.playGames)
+        store.record(.highScore, amount: m.score)
+        store.addCoins(coins)
+        let report = store.grow(cat.id, xp: xp)
+        var egg: Rarity?
+        if m.cleared, m.level >= 3, Double.random(in: 0..<1) < min(0.5, 0.1 + 0.04 * Double(m.level)) {
+            let r = Rarity.roll(luck: min(0.3, 0.03 * Double(m.level)))
+            store.addEgg(r, source: "Kitty match level \(m.level)")
+            egg = r
+        }
+        if m.cleared { store.setMatchLevel(m.level + 1) }
+        m.cleared ? Haptics.success() : Haptics.tap(.medium)
+        matchOutcome = m
+        result = (points, xp, coins, egg, report)
+        withAnimation(.easeInOut) { phase = .done }
     }
 
     private func finish() {

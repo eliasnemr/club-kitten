@@ -165,7 +165,14 @@ struct ShopView: View {
                     .frame(maxWidth: .infinity).frame(height: 100)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Theme.beige))
                     .overlay(alignment: .topTrailing) {
-                        if owned > 0 { Tag(text: "Owned", color: Theme.success).padding(6) }
+                        if owned > 0 {
+                            Tag(text: "Owned", color: Theme.success).padding(6)
+                        } else if let lv = kind.requiredLevel, !store.canBuy(kind) {
+                            Label("Lv \(lv) cat", systemImage: "lock.fill")
+                                .font(Theme.font(11, .heavy)).foregroundStyle(.white)
+                                .padding(.horizontal, 8).padding(.vertical, 4)
+                                .background(Capsule().fill(Theme.text.opacity(0.85))).padding(6)
+                        }
                     }
                 Text(kind.title).font(Theme.font(15, .bold)).lineLimit(1)
                 HStack {
@@ -260,6 +267,18 @@ struct ShopItemSheet: View {
                         Button("Place it now") { placeNow(kind, tint) }.buttonStyle(PrimaryButtonStyle())
                     }
                     Button("Keep shopping") { dismiss() }.buttonStyle(SecondaryButtonStyle())
+                } else if let lv = kind.requiredLevel, !store.canBuy(kind) {
+                    let best = store.cats.map(\.level).max() ?? 0
+                    Label("Raise a cat to level \(lv) to unlock this", systemImage: "lock.fill")
+                        .font(Theme.font(15, .bold)).foregroundStyle(Theme.text)
+                    Text("Your highest is level \(best). Play minigames and battles to level up.")
+                        .font(Theme.font(13)).foregroundStyle(Theme.muted)
+                    StatBar(label: "Lv \(best)", value: Double(best), max: Double(lv), color: Theme.rose)
+                    Button("Level up in Play") {
+                        store.tab = .play
+                        dismiss()
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
                 } else {
                     Button {
                         if store.buy(kind) {

@@ -116,7 +116,7 @@ struct FurnitureView: View {
         case .painting: paintingView
         case .fairyLights: fairyLightsView
         case .bookshelf: bookshelfView
-        case .boxCastle, .throne, .fireplace, .beanBag, .monstera, .pawClock: EmptyView()
+        case .boxCastle, .throne, .fireplace, .beanBag, .monstera, .pawClock, .goshaPortrait: EmptyView()
         case .plant:
             VStack(spacing: -4 * scale) {
                 ZStack {
