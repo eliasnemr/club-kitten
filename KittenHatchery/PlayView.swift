@@ -1,13 +1,12 @@
 import SwiftUI
 
 enum Minigame: String, CaseIterable, Identifiable {
-    case yarn, fish, purr, match, pond
+    case yarn, purr, match, pond
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .yarn: "Yarn chase"
-        case .fish: "Fish toss"
         case .purr: "Purr rhythm"
         case .match: "Kitty match"
         case .pond: "Pond fishing"
@@ -16,7 +15,6 @@ enum Minigame: String, CaseIterable, Identifiable {
     var blurb: String {
         switch self {
         case .yarn: "Tap the rolling yarn before it escapes"
-        case .fish: "Stop the meter in the sweet spot to fling fish"
         case .purr: "Tap when the ring meets the circle"
         case .match: "Remember where the cats are, then find every pair"
         case .pond: "Hold to lower your hook and catch fish. Watch out for old boots!"
@@ -25,16 +23,14 @@ enum Minigame: String, CaseIterable, Identifiable {
     var stat: StatKind {
         switch self {
         case .yarn: .speed
-        case .fish: .power
         case .purr: .charm
-        case .match: .charm
+        case .match: .power
         case .pond: .hp
         }
     }
     var icon: String {
         switch self {
         case .yarn: "circle.dotted.circle"
-        case .fish: "fish.fill"
         case .purr: "music.note"
         case .match: "rectangle.on.rectangle.angled"
         case .pond: "figure.fishing"
@@ -44,12 +40,21 @@ enum Minigame: String, CaseIterable, Identifiable {
     var perPoint: Int {
         switch self {
         case .yarn: 5
-        case .fish: 6
         case .purr: 8
         case .match: 1
         case .pond: 2
         }
     }
+    /// The score that earns the full 20 coins; less earns a share of it (at least 3).
+    var coinTarget: Int {
+        switch self {
+        case .yarn: 45
+        case .purr: 50
+        case .pond: 18
+        case .match: 1   // Kitty match works out its own coins
+        }
+    }
+
     /// Fishing needs a little longer to reel things in.
     var duration: Double { self == .pond ? 30 : 20 }
 }
@@ -252,7 +257,6 @@ struct MinigameContainer: View {
     private func gameView(_ start: Date) -> some View {
         switch game {
         case .yarn: YarnChaseGame(score: $score)
-        case .fish: FishTossGame(score: $score, start: start)
         case .purr: PurrRhythmGame(score: $score, start: start)
         case .match: EmptyView()   // shown directly by the container, with its own timer
         case .pond: PondFishingGame(score: $score, start: start, cat: cat)
@@ -345,7 +349,8 @@ struct MinigameContainer: View {
     private func finish() {
         let points = min(10, score / game.perPoint)
         let xp = 10 + score
-        let coins = 5 + score / 2
+        // Coins grow with the score up to a cap of 20, so no game is a coin farm.
+        let coins = max(3, min(20, Int((Double(score) / Double(game.coinTarget) * 20).rounded())))
         store.updateCat(cat.id) { $0.add(game.stat, points * game.stat.step) }
         store.record(.playGames)
         store.record(.highScore, amount: score)

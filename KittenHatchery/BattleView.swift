@@ -484,7 +484,8 @@ struct BattleView: View {
         let d = rival.difficulty
         let baseXP = 20 + rival.cat.level * 8
         let xp = Int(Double(won ? baseXP : baseXP / 3) * d.reward)
-        let coins = won ? Int(Double(Int.random(in: 15...30)) * d.reward) : 5
+        // Easy 8–12, Even 12–16, Tough 18–24; a loss still gets a little.
+        let coins = won ? Int.random(in: [8...12, 12...16, 18...24][Difficulty.allCases.firstIndex(of: d)!]) : 3
         var egg: Rarity?
         if won, Double.random(in: 0..<1) < d.eggChance {
             let r = Rarity.roll(luck: d == .tough ? 0.1 : 0)
